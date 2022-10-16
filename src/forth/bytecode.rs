@@ -3,9 +3,12 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-pub type VarString = heapless::String<8>;
+pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
 pub type CellData = i32;
+pub type VarStorage = Map<VarString, CellData, 8>;
+
+pub type Stack<const N: usize> = heapless::Vec<Cell, N>;
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub enum Op {
@@ -32,23 +35,27 @@ fn err(s: &str) {
 }
 impl Op {
     fn binary_op(vm: &mut VM, op: BinOp) {
-        let x = vm.pop().eval(vm);
-        let y = vm.pop().eval(vm);
+        // TODO error propagation ("done" should not be an error...)
+        vm.run().ok();
+        let y = vm.pop().unwrap_val();
+        vm.run().ok();
+        let x = vm.pop().unwrap_val();
+
         vm.push(Cell::Val(op(x, y)));
-        println!("-- end bop --");
     }
     fn eval(&self, vm: &mut VM) {
-        println!("----");
-        println!("eval {self:?}");
+        // println!("----");
+        // println!("eval {self:?}");
         match self {
             Op::Return => {
+                vm.run().ok();
                 let top = vm.pop();
                 vm.return_stack.push(top).expect("return stack too full");
             }
             Op::Nruter => {
                 // TODO: test
-                let cell = vm.pop();
-                vm.return_stack.push(cell).expect("return stack too full");
+                let cell = vm.return_stack.pop().expect("return stack too empty");
+                vm.stack.push(cell).expect("return stack too full");
             }
             Op::Call(name) => {
                 vm.call_fn(name);
@@ -70,15 +77,19 @@ impl Op {
                 }
             },
 
-            Op::GetVar(name) => vm.push(Cell::Val(*vm.get_var(name).expect("variable not found"))),
+            Op::GetVar(name) => vm.push(Cell::Val(
+                *vm.get_var(name)
+                    .expect(&format!("variable {name} not found")),
+            )),
             Op::SetVar(name) => {
-                vm.run().expect("boom");
+                // TODO error propagation
+                vm.run().ok();
                 let val = vm.pop().unwrap_val();
                 vm.set_var(name, val);
             }
         }
 
-        vm.dump_state();
+        // vm.dump_state();
     }
 }
 
@@ -89,22 +100,23 @@ pub enum Cell {
 }
 
 impl Cell {
-    fn eval(&self, vm: &mut VM) -> CellData {
-        println!("cell eval");
-        match self {
-            Cell::Val(val) => *val,
-            Cell::Op(op) => {
-                op.eval(vm);
-                vm.stack.last().unwrap().clone().eval(vm)
-            }
-        }
-    }
-    fn val(&self) -> Option<CellData> {
-        match self {
-            Cell::Val(val) => Some(*val),
-            Cell::Op(_) => None,
-        }
-    }
+    // fn eval(&self, vm: &mut VM) -> Option<CellData> {
+    //     println!("cell eval");
+    //     match self {
+    //         Cell::Val(val) => Some(*val),
+    //         Cell::Op(op) => {
+    //             op.eval(vm);
+    //             None
+    //             // vm.stack.last().unwrap().clone().eval(vm)
+    //         }
+    //     }
+    // }
+    // fn val(&self) -> Option<CellData> {
+    //     match self {
+    //         Cell::Val(val) => Some(*val),
+    //         Cell::Op(_) => None,
+    //     }
+    // }
     fn unwrap_val(&self) -> CellData {
         match self {
             Cell::Val(val) => *val,
@@ -114,16 +126,17 @@ impl Cell {
 }
 #[derive(Serialize, Deserialize)]
 pub struct VM {
-    stack: heapless::Vec<Cell, 32>,
-    return_stack: heapless::Vec<Cell, 4>,
-    globals: heapless::FnvIndexMap<VarString, CellData, 8>,
-    locals: Option<heapless::FnvIndexMap<VarString, CellData, 8>>,
-    funcs: heapless::FnvIndexMap<VarString, heapless::Vec<Cell, 64>, 4>,
+    stack: Stack<32>,
+    return_stack: Stack<4>,
+    globals: Map<VarString, CellData, 8>,
+    locals: heapless::Vec<VarStorage, 4>,
+    funcs: Map<VarString, Stack<64>, 4>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum VMErr {
     Done,
+    FunctionNotFound,
 }
 
 impl VM {
@@ -132,14 +145,44 @@ impl VM {
             stack: heapless::Vec::new(),
             return_stack: heapless::Vec::new(),
             globals: Map::new(),
-            locals: None,
+            locals: heapless::Vec::new(),
             funcs: Map::new(),
         }
     }
     pub fn dump_state(&self) {
         println!("stack: {:?}", self.stack);
-        println!("rstack: {:?}", self.return_stack);
-        println!("vars: {:?}", self.globals);
+        // println!("rstack: {:?}", self.return_stack);
+        println!("globals: {:?}", self.globals);
+        println!("locals: {:?}", self.locals);
+        // println!("funcs: {:?}", self.funcs);
+    }
+
+    pub fn add_func(&mut self, name: impl AsRef<str>, stack: &[Cell]) {
+        let mut our_stack = Stack::new();
+        our_stack.extend(stack.iter().cloned());
+        let name = name.as_ref();
+        dbg!(name);
+        self.funcs.insert(name.into(), our_stack).expect("oh no");
+    }
+
+    pub fn call_fn(&mut self, name: impl AsRef<str>) -> Result<(), VMErr> {
+        let name = name.as_ref();
+        // drempels
+        let ops = self.funcs.get(&name.into());
+        match ops {
+            Some(ops) => {
+                self.locals.push(VarStorage::new());
+                self.stack.extend(ops.iter().cloned());
+                println!("calling {name}");
+                self.dump_state();
+                let res = self.run();
+                self.dump_state();
+                println!("</{name}>");
+                self.locals.pop();
+                res
+            }
+            None => Err(VMErr::FunctionNotFound),
+        }
     }
 
     // TODO null/undefined?
@@ -147,33 +190,18 @@ impl VM {
         let name = name.as_ref().into();
 
         // TODO strictly speaking the caller should decide if it's a global
-        let context = self.locals.as_mut().unwrap_or(&mut self.globals);
+        let context = self.locals.last_mut().unwrap_or(&mut self.globals);
         context.insert(name, val).expect("variable space exhausted");
-    }
-
-    pub fn call_fn(&mut self, name: impl AsRef<str>) {
-        let mut func = self
-            .funcs
-            .get(&name.as_ref().into())
-            .expect("function {name} not found")
-            .clone();
-
-        // TODO goes boom with call stack > <
-        self.locals = Some(Map::new());
-
-        while let Some(cell) = func.pop() {
-            cell.eval(self);
-        }
-        self.locals = None;
     }
 
     pub fn get_var(&self, name: impl AsRef<str>) -> Option<&CellData> {
         let name = name.as_ref().into();
-        self.globals.get(&name)
+        let vars = self.locals.last().unwrap_or(&self.globals);
+        vars.get(&name)
     }
 
     pub fn push(&mut self, i: Cell) {
-        println!("push {i:?}");
+        // println!("push {i:?}");
         if let Err(e) = self.stack.push(i) {
             err("stack too full");
         }
@@ -181,7 +209,7 @@ impl VM {
 
     fn pop(&mut self) -> Cell {
         let res = self.stack.pop();
-        println!("pop! {res:?}");
+        // println!("pop! {res:?}");
         if res.is_none() {
             err("stack not full enough");
         }
@@ -189,7 +217,7 @@ impl VM {
     }
 
     pub fn push_return(&mut self, i: Cell) {
-        println!("rpush {i:?}");
+        // println!("rpush {i:?}");
         if let Err(e) = self.return_stack.push(i) {
             err("return stack too full");
         }
@@ -205,18 +233,14 @@ impl VM {
 
     pub fn run(&mut self) -> Result<(), VMErr> {
         // TODO meh, would rather not clone
-        let last = self.stack.last().cloned();
-        if let Some(Cell::Op(op)) = last {
+        while let Some(Cell::Op(op)) = self.stack.last().cloned() {
             self.stack.pop();
-            println!("run {op:?}");
-            println!("---");
             op.eval(self);
-            self.dump_state();
-            println!("---");
-            Ok(())
-        } else {
-            Err(VMErr::Done)
+            // self.dump_state();
+
+            // println!("{op:?} done\n------------------------");
         }
+        Err(VMErr::Done)
     }
 
     pub fn push_str(&mut self, s: impl AsRef<str>) {
@@ -242,7 +266,7 @@ impl VM {
             .pop()
             .expect("could not read string length: stack is empty")
             .unwrap_val() as usize;
-        let stack_items_len = 1 + (string_bytes_len >> 2);
+        let stack_items_len = (string_bytes_len >> 2) + 1;
         let stack_slice = stack.as_slice();
         let string_start = stack.len() - stack_items_len;
         let almost_string_stack = &stack_slice[string_start..][..stack_items_len];
@@ -253,8 +277,13 @@ impl VM {
         };
 
         stack.truncate(string_start);
+        dbg!(string_slice, string_start, stack_items_len);
 
         from_utf8(string_slice).unwrap_or("<err>")
+    }
+
+    pub fn stack(&self) -> &[Cell] {
+        self.stack.as_ref()
     }
 }
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]

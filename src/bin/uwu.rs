@@ -13,6 +13,7 @@ mod vis0r {
     use phf::phf_map;
     use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, FFI, VM};
     use swc_ecma_ast::*;
+    use swc_ecma_utils::ExprExt;
     use swc_ecma_visit::Visit;
 
     static FUNCS: phf::Map<&'static str, FFI> = phf_map! {
@@ -87,11 +88,13 @@ mod vis0r {
                     }
 
                     let callee = &call_expr.callee;
+                    dbg!(&callee);
                     match callee {
                         Callee::Super(_) => todo!(),
                         Callee::Import(_) => todo!(),
                         Callee::Expr(call_expr) => match call_expr.as_ref() {
                             Expr::Member(me) => {
+                                // TODO this always calls FFI funcs, SOME DAY we might want object support lol
                                 if let (Some(obj), Some(prop)) =
                                     (me.obj.as_ident(), me.prop.as_ident())
                                 {
@@ -103,6 +106,18 @@ mod vis0r {
                                     )));
                                 }
                             }
+                            Expr::Ident(func_name) => {
+                                // TODO this never calls FFI funcs
+
+                                self.vm.push(Cell::Op(Op::Nruter));
+                                // TODO eval args
+
+                                self.vm
+                                    .push(Cell::Op(Op::Call(func_name.sym.as_ref().into())));
+                            }
+                            Expr::This(_) => todo!(),
+                            Expr::Object(_) => todo!(),
+                            Expr::Fn(f) => todo!(),
                             _ => todo!(),
                         },
                     }
@@ -161,11 +176,13 @@ mod vis0r {
     impl Visit for Vis0r {
         fn visit_fn_decl(&mut self, n: &FnDecl) {
             let name = n.ident.sym.as_ref();
+            let mut child_visor = Vis0r::new();
             if let Some(body) = &n.function.body {
                 for s in body.stmts.iter().rev() {
-                    self.visit_stmt(s);
+                    child_visor.visit_stmt(s);
                 }
             }
+            self.vm.add_func(name, child_visor.vm.stack());
         }
         fn visit_ident(&mut self, n: &Ident) {
             let sym_str = n.sym.as_ref();
@@ -195,6 +212,27 @@ mod vis0r {
             self.eval_expr(ex);
         }
 
+        fn visit_return_stmt(&mut self, n: &ReturnStmt) {
+            if let Some(arg) = &n.arg {
+                self.eval_expr(arg.as_expr());
+                self.vm.push(Cell::Op(Op::Return));
+            }
+        }
+
+        fn visit_call_expr(&mut self, n: &CallExpr) {
+            panic!("test");
+            self.vm.push(Cell::Op(Op::Nruter));
+            // TODO eval args
+
+            let callee = &n
+                .callee
+                .as_expr()
+                .expect("cannot call this")
+                .as_ident()
+                .expect("cannot identify this")
+                .sym;
+            self.vm.push(Cell::Op(Op::Call(callee.as_ref().into())));
+        }
         fn visit_var_decl(&mut self, n: &VarDecl) {
             // TODO make this work for > 1 decl
             for decl in n.decls.iter() {
@@ -262,13 +300,20 @@ export function render3D(index, x, y, z) {
 }
     ";
 
-    let js = "export function main() {
-        //console.log(\"hello, javascript?!\");
-        var x = 10 * 5;
-        var y = 4 + x;
-        x = y;
+    let js = "
+    export function something() {
+        var x = 10;
+        return x;
+    }
+
+    export function main() {
+        //console.log(\"js!!11!!twelve∆h\");
+        var x = 10 * 5; // 50
+        var y = 4 + x; // 54
+        x = y - something(); // 54 - 10 = 44
     }";
 
+    // SOON
     // let js = include_str!("../../res/rainbow melt.js");
     let fm = cm.new_source_file(FileName::Custom("test.js".into()), js.into());
     let lexer = Lexer::new(
@@ -291,17 +336,14 @@ export function render3D(index, x, y, z) {
         e.into_diagnostic(&handler).emit()
     }) {
         let mut v = Vis0r::new();
-        // dbg!(&module);
+        dbg!(&module);
         v.visit_module(&module);
 
         println!("\n\n\n*** VM START ***\n");
         let vm = v.vm_mut();
-        println!();
         vm.dump_state();
-        while let Ok(_) = vm.run() {
-            // vm.dump_state();
-        }
-        println!("*** DÖNE ***\n");
+        vm.call_fn("main");
+        println!("\n*** DÖNE ***\n");
         vm.dump_state();
     }
 
