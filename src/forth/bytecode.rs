@@ -1,6 +1,6 @@
 use core::str::from_utf8;
 
-use fixed::{types::extra::U8, FixedI32};
+use fixed::{traits::ToFixed, types::extra::U8, FixedI32};
 use serde::{Deserialize, Serialize};
 
 pub type VarString = heapless::String<16>;
@@ -75,6 +75,12 @@ impl Op {
                     let str = vm.get_str();
                     console_log(str);
                 }
+                FFI::Sin => {
+                    vm.run().ok();
+                    let top = vm.pop();
+                    let res = cordic::sin(top.unwrap_val());
+                    vm.push(Cell::Val(res));
+                }
             },
 
             Op::GetVar(name) => vm.push(Cell::Val(
@@ -97,9 +103,13 @@ impl Op {
 pub enum Cell {
     Val(CellData),
     Op(Op),
+    Null,
 }
 
 impl Cell {
+    fn val(num: impl ToFixed) -> Self {
+        Self::Val(num.to_fixed())
+    }
     // fn eval(&self, vm: &mut VM) -> Option<CellData> {
     //     println!("cell eval");
     //     match self {
@@ -121,6 +131,7 @@ impl Cell {
         match self {
             Cell::Val(val) => *val,
             Cell::Op(_) => panic!("tried to read value but found op"),
+            Cell::Null => panic!("tried to read null"),
         }
     }
 }
@@ -185,7 +196,7 @@ impl VM {
         }
     }
 
-    // TODO null/undefined?
+    // TODO null (maybe just make the type `Cell`)
     pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
         let name = name.as_ref().into();
 
@@ -290,6 +301,7 @@ impl VM {
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum FFI {
     ConsoleLog1,
+    Sin,
 }
 
 fn console_log(s: &str) {
@@ -304,23 +316,38 @@ fn test_ffi() -> anyhow::Result<()> {
     Ok(())
 }
 #[test]
-fn test_ret() -> anyhow::Result<()> {
+fn test_serde() -> anyhow::Result<()> {
     let mut vm = VM::new();
 
-    vm.push(Cell::Val(5));
-    vm.push(Cell::Val(4));
+    vm.push(Cell::val(5));
+    vm.push(Cell::val(4));
     vm.push(Cell::Op(Op::Add));
-    vm.push(Cell::Val(10));
+    vm.push(Cell::val(10));
     vm.push(Cell::Op(Op::Mul));
     vm.push(Cell::Op(Op::Return));
 
     let ser: heapless::Vec<u8, 128> = postcard::to_vec(&vm)?;
     let mut de: VM = postcard::from_bytes(&ser)?;
 
-    println!("vm start");
-    de.dump_state();
-    while let Ok(_) = de.run() {}
-    assert_eq!(&[Cell::Val((90).into())], &de.return_stack);
+    de.run();
+    assert_eq!(&[Cell::val(90)], &de.return_stack);
     assert_eq!(&[], &de.stack);
+    Ok(())
+}
+
+#[test]
+fn test_sin() -> anyhow::Result<()> {
+    let mut vm = VM::new();
+
+    vm.push(Cell::val(1.0));
+    vm.push(Cell::Op(Op::FFI(FFI::Sin)));
+
+    vm.run();
+
+    let precise = 0.8414709848078965;
+    let approximate: f64 = vm.stack.pop().unwrap().unwrap_val().into();
+
+    let acceptable_error = 0.001;
+    assert!((precise - approximate).abs() < acceptable_error);
     Ok(())
 }

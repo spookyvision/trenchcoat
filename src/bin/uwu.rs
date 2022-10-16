@@ -8,8 +8,6 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::Visit;
 use vis0r::Vis0r;
 mod vis0r {
-    use std::collections::HashMap;
-
     use phf::phf_map;
     use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, FFI, VM};
     use swc_ecma_ast::*;
@@ -17,7 +15,8 @@ mod vis0r {
     use swc_ecma_visit::Visit;
 
     static FUNCS: phf::Map<&'static str, FFI> = phf_map! {
-        "console_log" => FFI::ConsoleLog1
+        "console_log" => FFI::ConsoleLog1,
+        "sin" => FFI::Sin
     };
 
     pub struct Vis0r {
@@ -107,13 +106,24 @@ mod vis0r {
                                 }
                             }
                             Expr::Ident(func_name) => {
-                                // TODO this never calls FFI funcs
+                                let func_name = func_name.sym.as_ref();
 
-                                self.vm.push(Cell::Op(Op::Nruter));
-                                // TODO eval args
+                                // TODO FFI funcs take precedence over local definitions, which is not optimal
+                                // ...maybe make pixelblaze FFI funcs a feature flag
 
-                                self.vm
-                                    .push(Cell::Op(Op::Call(func_name.sym.as_ref().into())));
+                                match FUNCS.get(func_name) {
+                                    Some(ffi_func) => {
+                                        dbg!("add ffi call to", func_name);
+                                        self.vm.push(Cell::Op(Op::FFI(*ffi_func)));
+                                    }
+                                    None => {
+                                        dbg!("add call to", func_name);
+                                        // TODO this currently breaks when a function returns nothing - means we probably need to support null
+                                        self.vm.push(Cell::Op(Op::Nruter));
+                                        // TODO eval args
+                                        self.vm.push(Cell::Op(Op::Call(func_name.into())));
+                                    }
+                                };
                             }
                             Expr::This(_) => todo!(),
                             Expr::Object(_) => todo!(),
@@ -219,20 +229,6 @@ mod vis0r {
             }
         }
 
-        fn visit_call_expr(&mut self, n: &CallExpr) {
-            panic!("test");
-            self.vm.push(Cell::Op(Op::Nruter));
-            // TODO eval args
-
-            let callee = &n
-                .callee
-                .as_expr()
-                .expect("cannot call this")
-                .as_ident()
-                .expect("cannot identify this")
-                .sym;
-            self.vm.push(Cell::Op(Op::Call(callee.as_ref().into())));
-        }
         fn visit_var_decl(&mut self, n: &VarDecl) {
             // TODO make this work for > 1 decl
             for decl in n.decls.iter() {
@@ -307,10 +303,11 @@ export function render3D(index, x, y, z) {
     }
 
     export function main() {
-        //console.log(\"js!!11!!twelve∆h\");
+        console.log(\"js!!11!!twelve∆h\");
         var x = 10 * 5; // 50
         var y = 4.4 + x; // 54.4
         x = y - something(); // 54.4 - 10.1 = 44.3
+        var z = sin(x - something()); // sin(44.3 - 10.1) = 0.35
     }";
 
     // SOON
