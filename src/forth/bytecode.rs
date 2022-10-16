@@ -1,11 +1,11 @@
 use core::str::from_utf8;
-use std::fmt::Display;
 
+use fixed::{types::extra::U8, FixedI32};
 use serde::{Deserialize, Serialize};
 
 pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
-pub type CellData = i32;
+pub type CellData = FixedI32<U8>;
 pub type VarStorage = Map<VarString, CellData, 8>;
 
 pub type Stack<const N: usize> = heapless::Vec<Cell, N>;
@@ -257,15 +257,16 @@ impl VM {
         let mut remaining_chonk = [0u8; 4];
         remaining_chonk[0..remainder.len()].copy_from_slice(remainder);
         self.push(Cell::Val(CellData::from_le_bytes(remaining_chonk)));
-        self.push(Cell::Val(valid_bytes_len as CellData));
+        self.push(Cell::Val(CellData::from_num(valid_bytes_len)));
     }
 
     pub fn get_str(&mut self) -> &str {
         let stack = &mut self.stack;
-        let string_bytes_len = stack
+        let string_bytes_len: usize = stack
             .pop()
             .expect("could not read string length: stack is empty")
-            .unwrap_val() as usize;
+            .unwrap_val()
+            .to_num();
         let stack_items_len = (string_bytes_len >> 2) + 1;
         let stack_slice = stack.as_slice();
         let string_start = stack.len() - stack_items_len;
@@ -319,7 +320,7 @@ fn test_ret() -> anyhow::Result<()> {
     println!("vm start");
     de.dump_state();
     while let Ok(_) = de.run() {}
-    assert_eq!(&[Cell::Val(90)], &de.return_stack);
+    assert_eq!(&[Cell::Val((90).into())], &de.return_stack);
     assert_eq!(&[], &de.stack);
     Ok(())
 }

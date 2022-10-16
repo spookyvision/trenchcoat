@@ -135,9 +135,9 @@ mod vis0r {
                     println!("lit! {:?}", lit);
                     match lit {
                         Lit::Str(s) => self.vm.push_str(&s.value),
-                        Lit::Bool(b) => self.vm.push(Cell::Val(b.value as CellData)),
+                        Lit::Bool(b) => self.vm.push(Cell::Val(CellData::from_num(b.value as i32))),
                         Lit::Null(_) => todo!(),
-                        Lit::Num(num) => self.vm.push(Cell::Val(num.value as CellData)),
+                        Lit::Num(num) => self.vm.push(Cell::Val(CellData::from_num(num.value))),
                         Lit::BigInt(_) => todo!(),
                         Lit::Regex(_) => todo!(),
                         Lit::JSXText(_) => todo!(),
@@ -302,15 +302,15 @@ export function render3D(index, x, y, z) {
 
     let js = "
     export function something() {
-        var x = 10;
+        var x = 10.1;
         return x;
     }
 
     export function main() {
         //console.log(\"js!!11!!twelve∆h\");
         var x = 10 * 5; // 50
-        var y = 4 + x; // 54
-        x = y - something(); // 54 - 10 = 44
+        var y = 4.4 + x; // 54.4
+        x = y - something(); // 54.4 - 10.1 = 44.3
     }";
 
     // SOON
