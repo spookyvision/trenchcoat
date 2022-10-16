@@ -11,7 +11,7 @@ mod vis0r {
     use std::collections::HashMap;
 
     use phf::phf_map;
-    use pixelblaze_rs::forth::bytecode::{Ops, FFI, VM};
+    use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, FFI, VM};
     use swc_ecma_ast::*;
     use swc_ecma_visit::Visit;
 
@@ -36,6 +36,8 @@ mod vis0r {
                 Expr::Unary(_) => todo!(),
                 Expr::Update(_) => todo!(),
                 Expr::Bin(bin_expr) => {
+                    self.eval_expr(&bin_expr.left);
+                    self.eval_expr(&bin_expr.right);
                     match bin_expr.op {
                         BinaryOp::EqEq => todo!(),
                         BinaryOp::NotEq => todo!(),
@@ -48,12 +50,12 @@ mod vis0r {
                         BinaryOp::LShift => todo!(),
                         BinaryOp::RShift => todo!(),
                         BinaryOp::ZeroFillRShift => todo!(),
-                        BinaryOp::Add => self.vm.push_op(Ops::Add),
-                        BinaryOp::Sub => self.vm.push_op(Ops::Sub),
-                        BinaryOp::Mul => self.vm.push_op(Ops::Mul),
-                        BinaryOp::Div => self.vm.push_op(Ops::Div),
-                        BinaryOp::Mod => self.vm.push_op(Ops::Mod),
-                        BinaryOp::BitOr => self.vm.push_op(Ops::Or),
+                        BinaryOp::Add => self.vm.push(Cell::Op(Op::Add)),
+                        BinaryOp::Sub => self.vm.push(Cell::Op(Op::Sub)),
+                        BinaryOp::Mul => self.vm.push(Cell::Op(Op::Mul)),
+                        BinaryOp::Div => self.vm.push(Cell::Op(Op::Div)),
+                        BinaryOp::Mod => self.vm.push(Cell::Op(Op::Mod)),
+                        BinaryOp::BitOr => self.vm.push(Cell::Op(Op::Or)),
                         BinaryOp::BitXor => todo!(),
                         BinaryOp::BitAnd => todo!(),
                         BinaryOp::LogicalOr => todo!(),
@@ -63,9 +65,6 @@ mod vis0r {
                         BinaryOp::Exp => todo!(),
                         BinaryOp::NullishCoalescing => todo!(),
                     }
-
-                    self.eval_expr(&bin_expr.left);
-                    self.eval_expr(&bin_expr.right);
                 }
                 Expr::Assign(ass) => {
                     let left = &ass.left;
@@ -75,8 +74,8 @@ mod vis0r {
                     let right = &ass.right;
                     println!("assign {name} = {:?}", right);
 
-                    self.vm.push_op(Ops::SetVar(name.into()));
                     self.eval_expr(right);
+                    self.vm.push(Cell::Op(Op::SetVar(name.into())));
                 }
                 Expr::Member(_) => todo!(),
                 Expr::SuperProp(_) => todo!(),
@@ -99,9 +98,9 @@ mod vis0r {
                                     let obj = obj.sym.as_ref();
                                     let prop = prop.sym.as_ref();
                                     let func = format!("{obj}_{prop}");
-                                    self.vm.push_op(Ops::FFI(
+                                    self.vm.push(Cell::Op(Op::FFI(
                                         *FUNCS.get(&func).expect("function not found!"),
-                                    ));
+                                    )));
                                 }
                             }
                             _ => todo!(),
@@ -115,15 +114,15 @@ mod vis0r {
                 }
                 Expr::Ident(id) => {
                     println!("ident! {:?}", id);
-                    self.vm.push_op(Ops::GetVar(id.sym.as_ref().into()));
+                    self.vm.push(Cell::Op(Op::GetVar(id.sym.as_ref().into())));
                 }
                 Expr::Lit(lit) => {
                     println!("lit! {:?}", lit);
                     match lit {
                         Lit::Str(s) => self.vm.push_str(&s.value),
-                        Lit::Bool(b) => self.vm.push(b.value as i32),
+                        Lit::Bool(b) => self.vm.push(Cell::Val(b.value as CellData)),
                         Lit::Null(_) => todo!(),
-                        Lit::Num(num) => self.vm.push(num.value as i32),
+                        Lit::Num(num) => self.vm.push(Cell::Val(num.value as CellData)),
                         Lit::BigInt(_) => todo!(),
                         Lit::Regex(_) => todo!(),
                         Lit::JSXText(_) => todo!(),
@@ -203,8 +202,8 @@ mod vis0r {
 
                 println!("\ndecl {name} = ");
 
-                self.vm.push_op(Ops::SetVar(name.into()));
                 self.eval_expr(decl.init.as_deref().unwrap());
+                self.vm.push(Cell::Op(Op::SetVar(name.into())));
                 println!("</decl {name}>");
             }
         }
@@ -264,11 +263,13 @@ export function render3D(index, x, y, z) {
     ";
 
     let js = "export function main() {
-        console.log(\"hello, javascript?!\");
+        //console.log(\"hello, javascript?!\");
         var x = 10 * 5;
         var y = 4 + x;
         x = y;
     }";
+
+    // let js = include_str!("../../res/rainbow melt.js");
     let fm = cm.new_source_file(FileName::Custom("test.js".into()), js.into());
     let lexer = Lexer::new(
         // We want to parse ecmascript
@@ -297,7 +298,7 @@ export function render3D(index, x, y, z) {
         let vm = v.vm_mut();
         println!();
         vm.dump_state();
-        while let Ok(_) = vm.step() {
+        while let Ok(_) = vm.run() {
             // vm.dump_state();
         }
         println!("*** DÖNE ***\n");
