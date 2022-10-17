@@ -1,31 +1,39 @@
+use pixelblaze_rs::forth::bytecode::{Cell, CellData};
 use swc_common::{
     errors::{ColorConfig, Handler},
     sync::Lrc,
     FileName, SourceMap,
 };
-use swc_ecma_ast::Ident;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::Visit;
 use vis0r::Vis0r;
 mod vis0r {
+    use std::collections::HashMap;
+
     use phf::phf_map;
-    use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, FFI, VM};
+    use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, StdTimer, FFI, VM};
     use swc_ecma_ast::*;
     use swc_ecma_utils::ExprExt;
     use swc_ecma_visit::Visit;
 
     static FUNCS: phf::Map<&'static str, FFI> = phf_map! {
         "console_log" => FFI::ConsoleLog1,
-        "sin" => FFI::Sin
+        "sin" => FFI::Sin,
+        "time" => FFI::Time,
+        "wave" => FFI::Wave,
     };
 
-    pub struct Vis0r {
-        vm: VM,
+    pub struct Vis0r<T> {
+        vm: VM<T>,
+        function_args: HashMap<String, Vec<String>>,
     }
 
-    impl Vis0r {
+    impl Vis0r<StdTimer> {
         pub fn new() -> Self {
-            Self { vm: VM::new() }
+            Self {
+                vm: VM::new(StdTimer::new()),
+                function_args: HashMap::new(),
+            }
         }
         fn eval_expr(&mut self, ex: &Expr) {
             match ex {
@@ -120,7 +128,6 @@ mod vis0r {
                                         dbg!("add call to", func_name);
                                         // TODO this currently breaks when a function returns nothing - means we probably need to support null
                                         self.vm.push(Cell::Op(Op::Nruter));
-                                        // TODO eval args
                                         self.vm.push(Cell::Op(Op::Call(func_name.into())));
                                     }
                                 };
@@ -178,21 +185,26 @@ mod vis0r {
             }
         }
 
-        pub fn vm_mut(&mut self) -> &mut VM {
+        pub fn vm_mut(&mut self) -> &mut VM<StdTimer> {
             &mut self.vm
         }
     }
 
-    impl Visit for Vis0r {
+    impl Visit for Vis0r<StdTimer> {
         fn visit_fn_decl(&mut self, n: &FnDecl) {
             let name = n.ident.sym.as_ref();
             let mut child_visor = Vis0r::new();
-            if let Some(body) = &n.function.body {
+
+            let func = &n.function;
+
+            if let Some(body) = &func.body {
                 for s in body.stmts.iter().rev() {
                     child_visor.visit_stmt(s);
                 }
             }
-            self.vm.add_func(name, child_visor.vm.stack());
+
+            let params: Vec<_> = func.params.iter().map(|p| var_name(&p.pat)).collect();
+            self.vm.add_func(name, &params, child_visor.vm.stack());
         }
         fn visit_ident(&mut self, n: &Ident) {
             let sym_str = n.sym.as_ref();
@@ -257,7 +269,6 @@ fn main() -> anyhow::Result<()> {
     let cm: Lrc<SourceMap> = Default::default();
     let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
 
-    // Real usage
     // let fm = cm
     //     .load_file(Path::new("test.js"))
     //     .expect("failed to load test.js");
@@ -311,7 +322,19 @@ export function render3D(index, x, y, z) {
     }";
 
     // SOON
-    // let js = include_str!("../../res/rainbow melt.js");
+    let js = include_str!("../../res/rainbow melt.js");
+
+    // let fm = cm
+    //     .load_file(Path::new("test.js"))
+    //     .expect("failed to load test.js");
+
+    let js = "
+    hl = pixelCount/2
+export function beforeRender(delta) {
+  t1 =  time(.1)
+  t2 = time(0.13)
+}
+    ";
     let fm = cm.new_source_file(FileName::Custom("test.js".into()), js.into());
     let lexer = Lexer::new(
         // We want to parse ecmascript
@@ -338,8 +361,14 @@ export function render3D(index, x, y, z) {
 
         println!("\n\n\n*** VM START ***\n");
         let vm = v.vm_mut();
+        vm.set_var("pixelCount", CellData::from_num(4i32));
         vm.dump_state();
-        vm.call_fn("main");
+        // run global init
+        vm.run();
+
+        let delta = 10;
+        vm.push(delta.into());
+        vm.call_fn("beforeRender");
         println!("\n*** DÖNE ***\n");
         vm.dump_state();
     }
