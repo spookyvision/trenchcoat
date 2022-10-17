@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use pixelblaze_rs::forth::bytecode::{Cell, CellData};
 use swc_common::{
     errors::{ColorConfig, Handler},
@@ -11,7 +13,9 @@ mod vis0r {
     use std::collections::HashMap;
 
     use phf::phf_map;
-    use pixelblaze_rs::forth::bytecode::{Cell, CellData, Op, StdTimer, FFI, VM};
+    use pixelblaze_rs::forth::bytecode::{
+        Cell, CellData, ConsolePeripherals, Op, StdTimer, FFI, VM,
+    };
     use swc_ecma_ast::*;
     use swc_ecma_utils::ExprExt;
     use swc_ecma_visit::Visit;
@@ -21,17 +25,18 @@ mod vis0r {
         "sin" => FFI::Sin,
         "time" => FFI::Time,
         "wave" => FFI::Wave,
+        "hsv" => FFI::Hsv,
     };
 
-    pub struct Vis0r<T> {
-        vm: VM<T>,
+    pub struct Vis0r<T, P> {
+        vm: VM<T, P>,
         function_args: HashMap<String, Vec<String>>,
     }
 
-    impl Vis0r<StdTimer> {
+    impl Vis0r<StdTimer, ConsolePeripherals> {
         pub fn new() -> Self {
             Self {
-                vm: VM::new(StdTimer::new()),
+                vm: VM::new(StdTimer::new(), ConsolePeripherals),
                 function_args: HashMap::new(),
             }
         }
@@ -126,8 +131,6 @@ mod vis0r {
                                     }
                                     None => {
                                         dbg!("add call to", func_name);
-                                        // TODO this currently breaks when a function returns nothing - means we probably need to support null
-                                        self.vm.push(Cell::Op(Op::Nruter));
                                         self.vm.push(Cell::Op(Op::Call(func_name.into())));
                                     }
                                 };
@@ -185,17 +188,21 @@ mod vis0r {
             }
         }
 
-        pub fn vm_mut(&mut self) -> &mut VM<StdTimer> {
+        pub fn vm_mut(&mut self) -> &mut VM<StdTimer, ConsolePeripherals> {
             &mut self.vm
         }
     }
 
-    impl Visit for Vis0r<StdTimer> {
+    impl Visit for Vis0r<StdTimer, ConsolePeripherals> {
         fn visit_fn_decl(&mut self, n: &FnDecl) {
             let name = n.ident.sym.as_ref();
             let mut child_visor = Vis0r::new();
 
             let func = &n.function;
+
+            // add implicit return
+            child_visor.vm.push(Cell::Null);
+            child_visor.vm.push(Op::Return.into());
 
             if let Some(body) = &func.body {
                 for s in body.stmts.iter().rev() {
@@ -247,9 +254,13 @@ mod vis0r {
                 let name = var_name(&decl.name);
 
                 println!("\ndecl {name} = ");
+                self.vm.push(Op::DeclVar(name.into()).into());
 
-                self.eval_expr(decl.init.as_deref().unwrap());
-                self.vm.push(Cell::Op(Op::SetVar(name.into())));
+                if let Some(init) = decl.init.as_deref() {
+                    self.eval_expr(init);
+                    self.vm.push(Op::SetVar(name.into()).into());
+                }
+
                 println!("</decl {name}>");
             }
         }
@@ -269,44 +280,6 @@ fn main() -> anyhow::Result<()> {
     let cm: Lrc<SourceMap> = Default::default();
     let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
 
-    // let fm = cm
-    //     .load_file(Path::new("test.js"))
-    //     .expect("failed to load test.js");
-
-    let js = "
-    // An XOR in 2D/3D space based on block reflections
-
-export function beforeRender(delta) {
-  t2 = time(0.1) * PI2
-  t1 = time(.1)
-  t3 = time(.5)
-  t4 = time(0.2) * PI2
-}
-
-export function render2D(index, x, y) {
-  render3D(index, x, y, 0)
-}
-
-export function render3D(index, x, y, z) {
-  h = sin(t2)
-  m = (.3 + triangle(t1) * .2)
-  h = h + (wave((5*(x-.5) ^ 5*(y-.5) ^ 5*(z-.5))/50  * ( triangle(t3) * 10 + 4 * sin(t4)) % m))
-  s = 1;
-  v = ((abs(h) + abs(m) + t1) % 1);
-  v = triangle(v*v)
-  h = triangle(h)/5 + (x + y + z)/3 + t1
-  
-  // test 
-  if (1 > 2*h) {
-    v = v * v * v
-  }
-  // test end
-
-  v = v * v * v
-  hsv(h, s, v)
-}
-    ";
-
     let js = "
     export function something() {
         var x = 10.1;
@@ -321,21 +294,20 @@ export function render3D(index, x, y, z) {
         var z = sin(x - something()); // sin(44.3 - 10.1) = 0.35
     }";
 
-    // SOON
-    let js = include_str!("../../res/rainbow melt.js");
-
-    // let fm = cm
-    //     .load_file(Path::new("test.js"))
-    //     .expect("failed to load test.js");
-
     let js = "
     hl = pixelCount/2
-export function beforeRender(delta) {
-  t1 =  time(.1)
-  t2 = time(0.13)
-}
-    ";
-    let fm = cm.new_source_file(FileName::Custom("test.js".into()), js.into());
+    export function beforeRender(delta) {
+        t1 =  time(.1)
+    }
+    
+    export function render(index) {
+        var c1 = 1-hl;
+    }";
+    let fm = cm.new_source_file(FileName::Custom("fake file.js".into()), js.into());
+
+    let fm = cm
+        .load_file(Path::new("res/rainbow melt.js"))
+        .expect("failed to load");
     let lexer = Lexer::new(
         // We want to parse ecmascript
         Syntax::Es(Default::default()),
@@ -356,12 +328,14 @@ export function beforeRender(delta) {
         e.into_diagnostic(&handler).emit()
     }) {
         let mut v = Vis0r::new();
-        dbg!(&module);
+        //dbg!(&module);
         v.visit_module(&module);
+
+        let pixel_count = 4i32;
 
         println!("\n\n\n*** VM START ***\n");
         let vm = v.vm_mut();
-        vm.set_var("pixelCount", CellData::from_num(4i32));
+        vm.set_var("pixelCount", CellData::from_num(pixel_count));
         vm.dump_state();
         // run global init
         vm.run();
@@ -369,46 +343,17 @@ export function beforeRender(delta) {
         let delta = 10;
         vm.push(delta.into());
         vm.call_fn("beforeRender");
+        vm.pop(); // toss away implicitly returned null
+
+        for pixel in 0..pixel_count {
+            vm.push(pixel.into());
+            vm.call_fn("render");
+            vm.pop(); // toss away implicitly returned null
+        }
         println!("\n*** DÖNE ***\n");
         vm.dump_state();
     }
 
-    // if let Ok(module) = parser.parse_module().map_err(|mut e| {
-    //     // Unrecoverable fatal error occurred
-    //     e.into_diagnostic(&handler).emit()
-    // }) {
-    //     for item in module.body.iter() {
-    //         match item {
-    //             ModuleItem::ModuleDecl(decl) => {
-    //                 println!("DECL {decl:?} \n\n");
-    //                 if let ModuleDecl::ExportDecl(ExportDecl { span, decl }) = decl {
-    //                     match decl {
-    //                         Decl::Class(class) => println!("{class:?}"),
-    //                         Decl::Fn(function) => println!("{function:?}"),
-    //                         Decl::Var(var) => println!("{var:?}"),
-    //                         Decl::TsInterface(_) => todo!(),
-    //                         Decl::TsTypeAlias(_) => todo!(),
-    //                         Decl::TsEnum(_) => todo!(),
-    //                         Decl::TsModule(_) => todo!(),
-    //                     }
-    //                 }
-    //                 // match decl {
-    //                 //     ModuleDecl::Import(_) => todo!(),
-    //                 //     ModuleDecl::ExportDecl(_) => todo!(),
-    //                 //     ModuleDecl::ExportNamed(_) => todo!(),
-    //                 //     ModuleDecl::ExportDefaultDecl(_) => todo!(),
-    //                 //     ModuleDecl::ExportDefaultExpr(_) => todo!(),
-    //                 //     ModuleDecl::ExportAll(_) => todo!(),
-    //                 //     ModuleDecl::TsImportEquals(_) => todo!(),
-    //                 //     ModuleDecl::TsExportAssignment(_) => todo!(),
-    //                 //     ModuleDecl::TsNamespaceExport(_) => todo!(),
-    //                 // }
-    //             }
-    //             ModuleItem::Stmt(st) => println!("ST {st:?}"),
-    //         }
-    //         println!("\n\n");
-    //     }
-    // }
     Ok(())
 }
 

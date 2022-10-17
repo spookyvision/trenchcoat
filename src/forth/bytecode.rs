@@ -4,12 +4,14 @@ use std::{f64::consts::PI, time::Instant};
 use fixed::{traits::ToFixed, types::extra::U8, FixedI32};
 use serde::{Deserialize, Serialize};
 
-use super::pixelblaze::{time, wave};
+use super::pixelblaze::{abs, hsv, time, wave};
 
 pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
+// TODO pixelblaze uses <16,16> but that's not the best general range
+// -> add flavors
 pub type CellData = FixedI32<U8>;
-pub type VarStorage = Map<VarString, CellData, 8>;
+pub type VarStorage = Map<VarString, Option<CellData>, 32>;
 
 pub type Stack<const N: usize> = heapless::Vec<Cell, N>;
 
@@ -17,6 +19,7 @@ pub type Stack<const N: usize> = heapless::Vec<Cell, N>;
 pub enum Op {
     Return, // data stack -> return stack
     Nruter, // return stack -> data stack
+    ExitFn,
     Add,
     Sub,
     Mul,
@@ -27,6 +30,7 @@ pub enum Op {
     Pop,
     FFI(FFI),
     Call(VarString),
+    DeclVar(VarString),
     SetVar(VarString),
     GetVar(VarString),
 }
@@ -37,7 +41,7 @@ fn err(s: &str) {
     panic!("ERR: {s}")
 }
 impl Op {
-    fn binary_op<T>(vm: &mut VM<T>, op: BinOp)
+    fn binary_op<T, P>(vm: &mut VM<T, P>, op: BinOp)
     where
         T: TimerMs,
     {
@@ -49,17 +53,18 @@ impl Op {
 
         vm.push(Cell::Val(op(x, y)));
     }
-    fn eval<T>(&self, vm: &mut VM<T>)
+    fn eval<T, P>(&self, vm: &mut VM<T, P>)
     where
         T: TimerMs,
     {
         // println!("----");
         // println!("eval {self:?}");
         match self {
+            Op::ExitFn => {
+                vm.exit_fn();
+            }
             Op::Return => {
-                vm.run().ok();
-                let top = vm.pop();
-                vm.return_stack.push(top).expect("return stack too full");
+                vm.do_return();
             }
             Op::Nruter => {
                 // TODO: test
@@ -102,6 +107,24 @@ impl Op {
                     let res = wave(top.unwrap_val());
                     vm.push(Cell::Val(res));
                 }
+                FFI::Abs => {
+                    vm.run().ok();
+                    let top = vm.pop();
+                    let res = abs(top.unwrap_val());
+                    vm.push(Cell::Val(res));
+                }
+                FFI::Hsv => {
+                    vm.run().ok();
+                    let v = vm.pop().unwrap_val();
+
+                    vm.run().ok();
+                    let s = vm.pop().unwrap_val();
+
+                    vm.run().ok();
+                    let h = vm.pop().unwrap_val();
+
+                    hsv(h, s, v);
+                }
             },
 
             Op::GetVar(name) => vm.push(Cell::Val(
@@ -110,9 +133,13 @@ impl Op {
             )),
             Op::SetVar(name) => {
                 // TODO error propagation
+
                 vm.run().ok();
                 let val = vm.pop().unwrap_val();
                 vm.set_var(name, val);
+            }
+            Op::DeclVar(name) => {
+                vm.decl_var(name);
             }
         }
 
@@ -172,42 +199,6 @@ impl Cell {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum VMErr {
-    Done,
-    FunctionNotFound,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct FuncDef {
-    stack: Stack<64>,
-    params: heapless::Vec<VarString, 4>,
-}
-
-impl FuncDef {
-    fn new<P: AsRef<str>>(stack: Stack<64>, params: &[P]) -> Self {
-        let mut our_params = heapless::Vec::new();
-        for param in params {
-            our_params.push(param.as_ref().into());
-        }
-        Self {
-            stack,
-            params: our_params,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct VM<TIMER> {
-    stack: Stack<32>,
-    return_stack: Stack<4>,
-    globals: Map<VarString, CellData, 8>,
-    locals: heapless::Vec<VarStorage, 4>,
-    funcs: Map<VarString, FuncDef, 8>,
-    #[serde(skip)]
-    timer: TIMER,
-}
-
 pub trait TimerMs {
     fn time_millis(&self) -> u32;
 }
@@ -230,24 +221,87 @@ impl StdTimer {
     }
 }
 
+pub trait Peripherals {
+    fn led_begin(&mut self) {}
+    fn led_hsv(&mut self, idx: CellData, h: CellData, s: CellData, v: CellData);
+    fn led_commit(&mut self) {}
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct ConsolePeripherals;
+
+impl Peripherals for ConsolePeripherals {
+    fn led_begin(&mut self) {
+        println!("LED begin");
+    }
+
+    fn led_commit(&mut self) {
+        println!("LED commit");
+    }
+
+    fn led_hsv(&mut self, idx: CellData, h: CellData, s: CellData, v: CellData) {
+        println!("LED[{idx}] HSV({h},{s},{v})");
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct FuncDef {
+    stack: Stack<64>,
+    params: heapless::Vec<VarString, 4>,
+}
+
+impl FuncDef {
+    fn new<P: AsRef<str>>(stack: Stack<64>, params: &[P]) -> Self {
+        let mut our_params = heapless::Vec::new();
+        for param in params {
+            our_params.push(param.as_ref().into());
+        }
+        Self {
+            stack,
+            params: our_params,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum VMErr {
+    Done,
+    FunctionNotFound,
+}
+#[derive(Serialize, Deserialize)]
+pub struct VM<TIMER, PERI> {
+    stack: Stack<64>,
+    return_stack: Stack<4>,
+    return_addr: Option<usize>,
+    globals: VarStorage,
+    locals: heapless::Vec<VarStorage, 8>,
+    funcs: Map<VarString, FuncDef, 8>,
+    #[serde(skip)]
+    timer: TIMER,
+    #[serde(skip)]
+    peripherals: PERI,
+}
+
 impl TimerMs for StdTimer {
     fn time_millis(&self) -> u32 {
         Instant::now().duration_since(self.start).as_millis() as u32
     }
 }
 
-impl<TIMER> VM<TIMER>
+impl<TIMER, PERI> VM<TIMER, PERI>
 where
     TIMER: TimerMs,
 {
-    pub fn new(timer: TIMER) -> Self {
+    pub fn new(timer: TIMER, peripherals: PERI) -> Self {
         Self {
             stack: heapless::Vec::new(),
             return_stack: heapless::Vec::new(),
+            return_addr: None,
             globals: Map::new(),
             locals: heapless::Vec::new(),
             funcs: Map::new(),
             timer,
+            peripherals,
         }
     }
     pub fn time_millis(&self) -> u32 {
@@ -256,10 +310,15 @@ where
 
     pub fn dump_state(&self) {
         println!("stack: {:?}", self.stack);
-        // println!("rstack: {:?}", self.return_stack);
+        println!("rstack: {:?}", self.return_stack);
         println!("globals: {:?}", self.globals);
         println!("locals: {:?}", self.locals);
-        println!("funcs: {:?}", self.funcs);
+        let debug_funcs = true;
+        if debug_funcs {
+            for (name, def) in &self.funcs {
+                println!("F {name} => {def:?}")
+            }
+        }
     }
 
     pub fn add_func<P: AsRef<str>>(&mut self, name: impl AsRef<str>, params: &[P], stack: &[Cell]) {
@@ -278,14 +337,18 @@ where
         let func = self.funcs.get(&name.into()).cloned();
         match func {
             Some(func) => {
+                println!("calling {name}");
                 self.locals.push(VarStorage::new());
 
+                self.return_addr = Some(self.stack.len());
                 for param in &func.params {
                     self.stack.push(Op::SetVar(param.clone()).into());
+                    self.stack.push(Op::DeclVar(param.clone()).into());
                     self.run().ok();
                 }
+                self.stack.push(Op::Nruter.into());
                 self.stack.extend(func.stack.iter().cloned());
-                println!("calling {name}");
+
                 self.dump_state();
                 let res = self.run();
                 self.dump_state();
@@ -297,19 +360,54 @@ where
         }
     }
 
-    // TODO null (maybe just make the type `Cell`)
-    pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
+    pub fn decl_var(&mut self, name: impl AsRef<str>) {
         let name = name.as_ref().into();
 
-        // TODO strictly speaking the caller should decide if it's a global
         let context = self.locals.last_mut().unwrap_or(&mut self.globals);
-        context.insert(name, val).expect("variable space exhausted");
+        context
+            .insert(name, None)
+            .expect("variable space exhausted");
+    }
+
+    // JS semantics: assignment is always valid, if there's no local, it's a global
+    fn var_assign_slot(&mut self, name: impl AsRef<str>) -> &mut Option<CellData> {
+        let name = name.as_ref();
+
+        if let Some(heapless::Entry::Occupied(local_entry)) = self
+            .locals
+            .last_mut()
+            .map(|locals| locals.entry(name.into()))
+        {
+            return local_entry.into_mut();
+        }
+
+        match self.globals.entry(name.into()) {
+            heapless::Entry::Occupied(entry) => entry.into_mut(),
+            heapless::Entry::Vacant(missing) => missing
+                .insert(None)
+                .expect("global variable space exhausted"),
+        }
+    }
+
+    pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
+        *self.var_assign_slot(name) = Some(val);
+        // let name = name.as_ref().into();
+
+        // let context = self.locals.last_mut().unwrap_or(&mut self.globals);
+        // context
+        //     .insert(name, Some(val))
+        //     .expect("variable space exhausted");
     }
 
     pub fn get_var(&self, name: impl AsRef<str>) -> Option<&CellData> {
-        let name = name.as_ref().into();
-        let vars = self.locals.last().unwrap_or(&self.globals);
-        vars.get(&name)
+        let name = &name.as_ref().into();
+
+        let res = match self.locals.last() {
+            Some(locals) => locals.get(name).or(self.globals.get(name)),
+            None => self.globals.get(name),
+        };
+        self.dump_state();
+        res.expect(&format!("variable {name} not found")).as_ref()
     }
 
     pub fn push(&mut self, i: Cell) {
@@ -319,7 +417,7 @@ where
         }
     }
 
-    fn pop(&mut self) -> Cell {
+    pub fn pop(&mut self) -> Cell {
         let res = self.stack.pop();
         // println!("pop! {res:?}");
         if res.is_none() {
@@ -343,14 +441,27 @@ where
         res.unwrap()
     }
 
+    pub fn exit_fn(&mut self) {
+        let ret = self.return_addr.take().expect("there's no return");
+        self.stack.truncate(ret);
+    }
+
+    pub fn do_return(&mut self) {
+        let top = self.pop();
+
+        let top_s = format!("{top:?}");
+        self.return_stack.push(top).expect("return stack too full");
+    }
+
     pub fn run(&mut self) -> Result<(), VMErr> {
         // TODO meh, would rather not clone
         while let Some(Cell::Op(op)) = self.stack.last().cloned() {
             self.stack.pop();
+            dbg!("running", &op);
+            self.dump_state();
             op.eval(self);
-            // self.dump_state();
 
-            // println!("{op:?} done\n------------------------");
+            println!("{op:?} done\n------------------------");
         }
         Err(VMErr::Done)
     }
@@ -405,6 +516,8 @@ pub enum FFI {
     Sin,
     Time,
     Wave,
+    Abs,
+    Hsv,
 }
 
 fn console_log(s: &str) {
@@ -413,14 +526,14 @@ fn console_log(s: &str) {
 
 #[test]
 fn test_ffi() -> anyhow::Result<()> {
-    let mut vm = VM::new(StdTimer::new());
+    let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
     vm.push_str("⭐hello, vm!⭐");
     vm.push(Cell::Op(Op::FFI(FFI::ConsoleLog1)));
     Ok(())
 }
 #[test]
 fn test_serde() -> anyhow::Result<()> {
-    let mut vm = VM::new(StdTimer::new());
+    let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
 
     vm.push(Cell::val(5));
     vm.push(Cell::val(4));
@@ -430,7 +543,7 @@ fn test_serde() -> anyhow::Result<()> {
     vm.push(Cell::Op(Op::Return));
 
     let ser: heapless::Vec<u8, 128> = postcard::to_vec(&vm)?;
-    let mut de: VM<StdTimer> = postcard::from_bytes(&ser)?;
+    let mut de: VM<StdTimer, ConsolePeripherals> = postcard::from_bytes(&ser)?;
 
     de.run();
     assert_eq!(&[Cell::val(90)], &de.return_stack);
@@ -440,8 +553,8 @@ fn test_serde() -> anyhow::Result<()> {
 
 #[test]
 fn test_sin() -> anyhow::Result<()> {
-    use super::util::assert_similar;
-    let mut vm = VM::new(StdTimer::new());
+    use super::util::{assert_similar, vm};
+    let mut vm = vm();
 
     let param = 0.1f64;
     vm.push(Cell::val(param));
@@ -452,6 +565,6 @@ fn test_sin() -> anyhow::Result<()> {
     let precise: f64 = param.sin();
     let approximate = vm.stack.pop().unwrap().unwrap_val();
 
-    assert_similar(param.sin(), approximate, 1);
+    assert_similar(precise, approximate, 1);
     Ok(())
 }

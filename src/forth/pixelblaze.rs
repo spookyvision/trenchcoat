@@ -20,6 +20,10 @@ pub(crate) fn abs(val: CellData) -> CellData {
     val.abs()
 }
 
+pub(crate) fn hsv(h: CellData, s: CellData, v: CellData) {
+    println!("set hsv! {h:?}, {s:?}, {v:?}");
+}
+
 pub(crate) fn sin(val: CellData) -> CellData {
     cordic::sin(val)
 }
@@ -37,7 +41,7 @@ fn test_wave() {
     super::util::assert_similar(0.0, wave(CellData::from_num(0.75)), decimals);
 }
 
-pub(crate) fn time<T>(interval: CellData, vm_context: &VM<T>) -> CellData
+pub(crate) fn time<T, P>(interval: CellData, vm_context: &VM<T, P>) -> CellData
 where
     T: TimerMs,
 {
