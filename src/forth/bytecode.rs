@@ -88,7 +88,7 @@ impl Op {
             Op::FFI(ffi_fn) => match ffi_fn {
                 FFI::ConsoleLog1 => {
                     let str = vm.get_str();
-                    console_log(str);
+                    console_log(str.as_ref());
                 }
                 FFI::Sin => {
                     vm.run().ok();
@@ -487,7 +487,7 @@ where
         self.push(Cell::Val(CellData::from_num(valid_bytes_len)));
     }
 
-    pub fn get_str(&mut self) -> &str {
+    pub fn get_str(&mut self) -> impl AsRef<str> {
         let stack = &mut self.stack;
         let string_bytes_len: usize = stack
             .pop()
@@ -499,15 +499,20 @@ where
         let string_start = stack.len() - stack_items_len;
         let almost_string_stack = &stack_slice[string_start..][..stack_items_len];
 
-        // TODO bytemuck or whatever
-        let string_slice = unsafe {
-            core::slice::from_raw_parts(almost_string_stack.as_ptr() as *const u8, string_bytes_len)
-        };
+        let res = &mut [0u8; 32];
+
+        for (i, packed_bytes) in almost_string_stack
+            .iter()
+            .map(|elem| elem.unwrap_val())
+            .enumerate()
+        {
+            res[i * 4..][..4].copy_from_slice(&packed_bytes.to_le_bytes());
+        }
 
         stack.truncate(string_start);
-        dbg!(string_slice, string_start, stack_items_len);
-
-        from_utf8(string_slice).unwrap_or("<err>")
+        let stack_str = from_utf8(&res[..string_bytes_len]).unwrap_or("<err>");
+        let res: heapless::String<32> = stack_str.into();
+        res
     }
 
     pub fn stack(&self) -> &[Cell] {
@@ -532,6 +537,17 @@ fn console_log(s: &str) {
 mod tests {
     use super::*;
     use crate::forth::util::{assert_similar, vm};
+
+    #[test]
+    fn test_str() -> anyhow::Result<()> {
+        let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
+        let s = "⭐hello, vm!⭐";
+        vm.push_str(s);
+        assert_eq!(vm.get_str().as_ref(), s);
+
+        Ok(())
+    }
+
     #[test]
     fn test_ffi() -> anyhow::Result<()> {
         let mut vm = vm();
