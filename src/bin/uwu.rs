@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use pixelblaze_rs::forth::bytecode::{Cell, CellData};
+use pixelblaze_rs::forth::bytecode::CellData;
 use swc_common::{
     errors::{ColorConfig, Handler},
     sync::Lrc,

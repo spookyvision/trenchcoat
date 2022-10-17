@@ -2,7 +2,6 @@ pub mod bytecode;
 pub mod env;
 pub mod inter;
 mod ops;
-mod pixelblaze;
 
 #[cfg(test)]
 pub mod util;

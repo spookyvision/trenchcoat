@@ -5,7 +5,7 @@ use fixed::{traits::ToFixed, types::extra::U8, FixedI32};
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use super::pixelblaze::{abs, hsv, time, wave};
+use crate::pixelblaze::funcs::{abs, hsv, time, wave};
 
 pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
