@@ -2,6 +2,7 @@ use core::str::from_utf8;
 use std::{f64::consts::PI, time::Instant};
 
 use fixed::{traits::ToFixed, types::extra::U8, FixedI32};
+use log::trace;
 use serde::{Deserialize, Serialize};
 
 use super::pixelblaze::{abs, hsv, time, wave};
@@ -309,14 +310,14 @@ where
     }
 
     pub fn dump_state(&self) {
-        println!("stack: {:?}", self.stack);
-        println!("rstack: {:?}", self.return_stack);
-        println!("globals: {:?}", self.globals);
-        println!("locals: {:?}", self.locals);
+        log::debug!("stack: {:?}", self.stack);
+        log::debug!("rstack: {:?}", self.return_stack);
+        log::debug!("globals: {:?}", self.globals);
+        log::debug!("locals: {:?}", self.locals);
         let debug_funcs = true;
         if debug_funcs {
             for (name, def) in &self.funcs {
-                println!("F {name} => {def:?}")
+                log::debug!("F {name} => {def:?}")
             }
         }
     }
@@ -349,9 +350,14 @@ where
                 self.stack.push(Op::Nruter.into());
                 self.stack.extend(func.stack.iter().cloned());
 
-                self.dump_state();
+                let extra_verbose = false;
+                if extra_verbose {
+                    self.dump_state();
+                }
                 let res = self.run();
-                self.dump_state();
+                if extra_verbose {
+                    self.dump_state();
+                }
                 println!("</{name}>");
                 self.locals.pop();
                 res
@@ -448,8 +454,6 @@ where
 
     pub fn do_return(&mut self) {
         let top = self.pop();
-
-        let top_s = format!("{top:?}");
         self.return_stack.push(top).expect("return stack too full");
     }
 
@@ -457,18 +461,18 @@ where
         // TODO meh, would rather not clone
         while let Some(Cell::Op(op)) = self.stack.last().cloned() {
             self.stack.pop();
-            dbg!("running", &op);
+            trace!("running {op:?}");
             self.dump_state();
             op.eval(self);
 
-            println!("{op:?} done\n------------------------");
+            trace!("{op:?} done\n------------------------");
         }
         Err(VMErr::Done)
     }
 
     pub fn push_str(&mut self, s: impl AsRef<str>) {
         let s = s.as_ref();
-        println!("push str {s:?}");
+        log::debug!("push str {s:?}");
         let bytes = s.as_bytes();
         let valid_bytes_len = bytes.len();
         let chonky_boytes = bytes.chunks_exact(4);
@@ -521,50 +525,57 @@ pub enum FFI {
 }
 
 fn console_log(s: &str) {
-    println!("hullo from rust: >>>{s}<<<")
+    println!("[VM::LOG] {s}")
 }
 
-#[test]
-fn test_ffi() -> anyhow::Result<()> {
-    let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
-    vm.push_str("⭐hello, vm!⭐");
-    vm.push(Cell::Op(Op::FFI(FFI::ConsoleLog1)));
-    Ok(())
-}
-#[test]
-fn test_serde() -> anyhow::Result<()> {
-    let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::forth::util::{assert_similar, vm};
+    #[test]
+    fn test_ffi() -> anyhow::Result<()> {
+        let mut vm = vm();
+        vm.push(Cell::from(-5i32));
+        vm.push(Op::FFI(FFI::Abs).into());
+        vm.run();
+        assert_eq!(&[Cell::from(5i32)], &vm.stack);
+        Ok(())
+    }
 
-    vm.push(Cell::val(5));
-    vm.push(Cell::val(4));
-    vm.push(Cell::Op(Op::Add));
-    vm.push(Cell::val(10));
-    vm.push(Cell::Op(Op::Mul));
-    vm.push(Cell::Op(Op::Return));
+    #[test]
+    fn test_serde() -> anyhow::Result<()> {
+        let mut vm = vm();
 
-    let ser: heapless::Vec<u8, 128> = postcard::to_vec(&vm)?;
-    let mut de: VM<StdTimer, ConsolePeripherals> = postcard::from_bytes(&ser)?;
+        vm.push(Cell::val(5));
+        vm.push(Cell::val(4));
+        vm.push(Cell::Op(Op::Add));
+        vm.push(Cell::val(10));
+        vm.push(Cell::Op(Op::Mul));
 
-    de.run();
-    assert_eq!(&[Cell::val(90)], &de.return_stack);
-    assert_eq!(&[], &de.stack);
-    Ok(())
-}
+        let ser: heapless::Vec<u8, 128> = postcard::to_vec(&vm)?;
+        let mut de: VM<StdTimer, ConsolePeripherals> = postcard::from_bytes(&ser)?;
 
-#[test]
-fn test_sin() -> anyhow::Result<()> {
-    use super::util::{assert_similar, vm};
-    let mut vm = vm();
+        de.run();
+        de.do_return();
+        assert_eq!(&[Cell::val(90)], &de.return_stack);
+        assert_eq!(&[], &de.stack);
+        Ok(())
+    }
 
-    let param = 0.1f64;
-    vm.push(Cell::val(param));
-    vm.push(Cell::Op(Op::FFI(FFI::Sin)));
+    #[test]
+    fn test_sin() -> anyhow::Result<()> {
+        let mut vm = vm();
 
-    vm.run();
+        let param = 0.1f64;
+        vm.push(Cell::val(param));
+        vm.push(Cell::Op(Op::FFI(FFI::Sin)));
 
-    let precise: f64 = param.sin();
-    let approximate = vm.stack.pop().unwrap().unwrap_val();
+        vm.run();
 
-    assert_similar(precise, approximate, 1);
-    Ok(())
+        let precise: f64 = param.sin();
+        let approximate = vm.stack.pop().unwrap().unwrap_val();
+
+        assert_similar(precise, approximate, 1);
+        Ok(())
+    }
 }

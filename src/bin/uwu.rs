@@ -9,6 +9,89 @@ use swc_common::{
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::Visit;
 use vis0r::Vis0r;
+// what's this?
+fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+    let cm: Lrc<SourceMap> = Default::default();
+    let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
+
+    let js = "
+    export function something() {
+        var x = 10.1;
+        return x;
+    }
+
+    export function main() {
+        console.log(\"⭐ hello, VM! ⭐\");
+        var x = 10 * 5; // 50
+        var y = 4.4 + x; // 54.4
+        x = y - something(); // 54.4 - 10.1 = 44.3
+        var z = sin(x - something()); // sin(44.3 - 10.1) = 0.35
+    }";
+
+    let js = "
+    hl = pixelCount/2
+    export function beforeRender(delta) {
+        t1 =  time(.1)
+    }
+    
+    export function render(index) {
+        var c1 = 1-hl;
+    }";
+    let fm = cm.new_source_file(FileName::Custom("fake file.js".into()), js.into());
+
+    let fm = cm
+        .load_file(Path::new("res/rainbow melt.js"))
+        .expect("failed to load");
+    let lexer = Lexer::new(
+        // We want to parse ecmascript
+        Syntax::Es(Default::default()),
+        // EsVersion defaults to es5
+        Default::default(),
+        StringInput::from(&*fm),
+        None,
+    );
+
+    let mut parser = Parser::new_from(lexer);
+
+    for e in parser.take_errors() {
+        e.into_diagnostic(&handler).emit();
+    }
+
+    if let Ok(module) = parser.parse_module().map_err(|e| {
+        // Unrecoverable fatal error occurred
+        e.into_diagnostic(&handler).emit()
+    }) {
+        let mut v = Vis0r::new();
+        //dbg!(&module);
+        v.visit_module(&module);
+
+        let pixel_count = 4i32;
+
+        println!("\n\n\n*** VM START ***\n");
+        let vm = v.vm_mut();
+        vm.set_var("pixelCount", CellData::from_num(pixel_count));
+        vm.dump_state();
+        // run global init
+        vm.run();
+
+        let delta = 10;
+        vm.push(delta.into());
+        vm.call_fn("beforeRender");
+        vm.pop(); // toss away implicitly returned null
+
+        for pixel in 0..pixel_count {
+            vm.push(pixel.into());
+            vm.call_fn("render");
+            vm.pop(); // toss away implicitly returned null
+        }
+        println!("\n*** DÖNE ***\n");
+        vm.dump_state();
+    }
+
+    Ok(())
+}
+
 mod vis0r {
     use std::collections::HashMap;
 
@@ -275,86 +358,3 @@ mod vis0r {
         res
     }
 }
-
-fn main() -> anyhow::Result<()> {
-    let cm: Lrc<SourceMap> = Default::default();
-    let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
-
-    let js = "
-    export function something() {
-        var x = 10.1;
-        return x;
-    }
-
-    export function main() {
-        console.log(\"js!!11!!twelve∆h\");
-        var x = 10 * 5; // 50
-        var y = 4.4 + x; // 54.4
-        x = y - something(); // 54.4 - 10.1 = 44.3
-        var z = sin(x - something()); // sin(44.3 - 10.1) = 0.35
-    }";
-
-    let js = "
-    hl = pixelCount/2
-    export function beforeRender(delta) {
-        t1 =  time(.1)
-    }
-    
-    export function render(index) {
-        var c1 = 1-hl;
-    }";
-    let fm = cm.new_source_file(FileName::Custom("fake file.js".into()), js.into());
-
-    let fm = cm
-        .load_file(Path::new("res/rainbow melt.js"))
-        .expect("failed to load");
-    let lexer = Lexer::new(
-        // We want to parse ecmascript
-        Syntax::Es(Default::default()),
-        // EsVersion defaults to es5
-        Default::default(),
-        StringInput::from(&*fm),
-        None,
-    );
-
-    let mut parser = Parser::new_from(lexer);
-
-    for e in parser.take_errors() {
-        e.into_diagnostic(&handler).emit();
-    }
-
-    if let Ok(module) = parser.parse_module().map_err(|e| {
-        // Unrecoverable fatal error occurred
-        e.into_diagnostic(&handler).emit()
-    }) {
-        let mut v = Vis0r::new();
-        //dbg!(&module);
-        v.visit_module(&module);
-
-        let pixel_count = 4i32;
-
-        println!("\n\n\n*** VM START ***\n");
-        let vm = v.vm_mut();
-        vm.set_var("pixelCount", CellData::from_num(pixel_count));
-        vm.dump_state();
-        // run global init
-        vm.run();
-
-        let delta = 10;
-        vm.push(delta.into());
-        vm.call_fn("beforeRender");
-        vm.pop(); // toss away implicitly returned null
-
-        for pixel in 0..pixel_count {
-            vm.push(pixel.into());
-            vm.call_fn("render");
-            vm.pop(); // toss away implicitly returned null
-        }
-        println!("\n*** DÖNE ***\n");
-        vm.dump_state();
-    }
-
-    Ok(())
-}
-
-pub fn whats_this(js: &str) {}

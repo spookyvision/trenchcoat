@@ -29,6 +29,8 @@ anyhow = "1.0.65"
 phf = { version = "0.11.1", features = ["macros"] }
 fixed = { version = "1.19.0", features = ["serde","num-traits"] }
 cordic = "0.1.5"
+log = "0.4.17"
+pretty_env_logger = "0.4.0"
 
 [dev-dependencies]
 #anyhow = "1.0.65"
