@@ -1,11 +1,12 @@
 use core::str::from_utf8;
-use std::{f64::consts::PI, time::Instant};
 
 use fixed::{traits::ToFixed, types::extra::U8, FixedI32};
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use crate::pixelblaze::funcs::{abs, hsv, time, wave};
+pub trait FFI<VM> {
+    fn dispatch(&self, vm: &mut VM);
+}
 
 pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
@@ -14,10 +15,10 @@ pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
 pub type CellData = FixedI32<U8>;
 pub type VarStorage = Map<VarString, Option<CellData>, 32>;
 
-pub type Stack<const N: usize> = heapless::Vec<Cell, N>;
+pub type Stack<FFI, const N: usize> = heapless::Vec<Cell<FFI>, N>;
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub enum Op {
+pub enum Op<FFI> {
     Return, // data stack -> return stack
     Nruter, // return stack -> data stack
     ExitFn,
@@ -29,11 +30,11 @@ pub enum Op {
     And,
     Or,
     Pop,
-    FFI(FFI),
     Call(VarString),
     DeclVar(VarString),
     SetVar(VarString),
     GetVar(VarString),
+    FFI(FFI),
 }
 
 type BinOp = fn(CellData, CellData) -> CellData;
@@ -41,121 +42,15 @@ type BinOp = fn(CellData, CellData) -> CellData;
 fn err(s: &str) {
     panic!("ERR: {s}")
 }
-impl Op {
-    fn binary_op<T, P>(vm: &mut VM<T, P>, op: BinOp)
-    where
-        T: TimerMs,
-    {
-        // TODO error propagation ("done" should not be an error...)
-        vm.run().ok();
-        let y = vm.pop().unwrap_val();
-        vm.run().ok();
-        let x = vm.pop().unwrap_val();
-
-        vm.push(Cell::Val(op(x, y)));
-    }
-    fn eval<T, P>(&self, vm: &mut VM<T, P>)
-    where
-        T: TimerMs,
-    {
-        // println!("----");
-        // println!("eval {self:?}");
-        match self {
-            Op::ExitFn => {
-                vm.exit_fn();
-            }
-            Op::Return => {
-                vm.do_return();
-            }
-            Op::Nruter => {
-                // TODO: test
-                let cell = vm.return_stack.pop().expect("return stack too empty");
-                vm.stack.push(cell).expect("return stack too full");
-            }
-            Op::Call(name) => {
-                vm.call_fn(name);
-            }
-            Op::Add => Self::binary_op(vm, |x, y| x + y),
-            Op::Sub => Self::binary_op(vm, |x, y| x - y),
-            Op::Mul => Self::binary_op(vm, |x, y| x * y),
-            Op::Div => Self::binary_op(vm, |x, y| x / y),
-            Op::Mod => Self::binary_op(vm, |x, y| x % y),
-            Op::And => Self::binary_op(vm, |x, y| x & y),
-            Op::Or => Self::binary_op(vm, |x, y| x | y),
-            Op::Pop => {
-                let _ = vm.pop();
-            }
-            Op::FFI(ffi_fn) => match ffi_fn {
-                FFI::ConsoleLog1 => {
-                    let str = vm.get_str();
-                    console_log(str.as_ref());
-                }
-                FFI::Sin => {
-                    vm.run().ok();
-                    let top = vm.pop();
-                    let res = cordic::sin(top.unwrap_val());
-                    vm.push(Cell::Val(res));
-                }
-                FFI::Time => {
-                    vm.run().ok();
-                    let top = vm.pop();
-                    let res = time(top.unwrap_val(), vm);
-                    vm.push(Cell::Val(res));
-                }
-                FFI::Wave => {
-                    vm.run().ok();
-                    let top = vm.pop();
-                    let res = wave(top.unwrap_val());
-                    vm.push(Cell::Val(res));
-                }
-                FFI::Abs => {
-                    vm.run().ok();
-                    let top = vm.pop();
-                    let res = abs(top.unwrap_val());
-                    vm.push(Cell::Val(res));
-                }
-                FFI::Hsv => {
-                    vm.run().ok();
-                    let v = vm.pop().unwrap_val();
-
-                    vm.run().ok();
-                    let s = vm.pop().unwrap_val();
-
-                    vm.run().ok();
-                    let h = vm.pop().unwrap_val();
-
-                    hsv(h, s, v);
-                }
-            },
-
-            Op::GetVar(name) => vm.push(Cell::Val(
-                *vm.get_var(name)
-                    .expect(&format!("variable {name} not found")),
-            )),
-            Op::SetVar(name) => {
-                // TODO error propagation
-
-                vm.run().ok();
-                let val = vm.pop().unwrap_val();
-                vm.set_var(name, val);
-            }
-            Op::DeclVar(name) => {
-                vm.decl_var(name);
-            }
-        }
-
-        // vm.dump_state();
-    }
-}
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub enum Cell {
+pub enum Cell<FFI> {
     Val(CellData),
-    Op(Op),
+    Op(Op<FFI>),
     Null,
 }
 
-impl<TF> From<TF> for Cell
+impl<TF, FFI> From<TF> for Cell<FFI>
 where
     TF: ToFixed,
 {
@@ -164,34 +59,17 @@ where
     }
 }
 
-impl From<Op> for Cell {
-    fn from(op: Op) -> Self {
+impl<FFI> From<Op<FFI>> for Cell<FFI> {
+    fn from(op: Op<FFI>) -> Self {
         Self::Op(op)
     }
 }
 
-impl Cell {
-    fn val(num: impl ToFixed) -> Self {
+impl<FFI> Cell<FFI> {
+    pub(crate) fn val(num: impl ToFixed) -> Self {
         Self::Val(num.to_fixed())
     }
-    // fn eval(&self, vm: &mut VM) -> Option<CellData> {
-    //     println!("cell eval");
-    //     match self {
-    //         Cell::Val(val) => Some(*val),
-    //         Cell::Op(op) => {
-    //             op.eval(vm);
-    //             None
-    //             // vm.stack.last().unwrap().clone().eval(vm)
-    //         }
-    //     }
-    // }
-    // fn val(&self) -> Option<CellData> {
-    //     match self {
-    //         Cell::Val(val) => Some(*val),
-    //         Cell::Op(_) => None,
-    //     }
-    // }
-    fn unwrap_val(&self) -> CellData {
+    pub(crate) fn unwrap_val(&self) -> CellData {
         match self {
             Cell::Val(val) => *val,
             Cell::Op(_) => panic!("tried to read value but found op"),
@@ -200,59 +78,14 @@ impl Cell {
     }
 }
 
-pub trait TimerMs {
-    fn time_millis(&self) -> u32;
-}
-
-pub struct StdTimer {
-    start: Instant,
-}
-
-impl Default for StdTimer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl StdTimer {
-    pub fn new() -> Self {
-        Self {
-            start: Instant::now(),
-        }
-    }
-}
-
-pub trait Peripherals {
-    fn led_begin(&mut self) {}
-    fn led_hsv(&mut self, idx: CellData, h: CellData, s: CellData, v: CellData);
-    fn led_commit(&mut self) {}
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-pub struct ConsolePeripherals;
-
-impl Peripherals for ConsolePeripherals {
-    fn led_begin(&mut self) {
-        println!("LED begin");
-    }
-
-    fn led_commit(&mut self) {
-        println!("LED commit");
-    }
-
-    fn led_hsv(&mut self, idx: CellData, h: CellData, s: CellData, v: CellData) {
-        println!("LED[{idx}] HSV({h},{s},{v})");
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct FuncDef {
-    stack: Stack<64>,
+struct FuncDef<FFI> {
+    stack: Stack<FFI, 64>,
     params: heapless::Vec<VarString, 4>,
 }
 
-impl FuncDef {
-    fn new<P: AsRef<str>>(stack: Stack<64>, params: &[P]) -> Self {
+impl<FFI> FuncDef<FFI> {
+    fn new<P: AsRef<str>>(stack: Stack<FFI, 64>, params: &[P]) -> Self {
         let mut our_params = heapless::Vec::new();
         for param in params {
             our_params.push(param.as_ref().into());
@@ -270,30 +103,22 @@ pub enum VMErr {
     FunctionNotFound,
 }
 #[derive(Serialize, Deserialize)]
-pub struct VM<TIMER, PERI> {
-    stack: Stack<64>,
-    return_stack: Stack<4>,
+pub struct VM<FFI_GEN, RT> {
+    stack: Stack<FFI_GEN, 64>,
+    return_stack: Stack<FFI_GEN, 4>,
     return_addr: Option<usize>,
     globals: VarStorage,
     locals: heapless::Vec<VarStorage, 8>,
-    funcs: Map<VarString, FuncDef, 8>,
+    funcs: Map<VarString, FuncDef<FFI_GEN>, 8>,
     #[serde(skip)]
-    timer: TIMER,
-    #[serde(skip)]
-    peripherals: PERI,
+    runtime: RT,
 }
 
-impl TimerMs for StdTimer {
-    fn time_millis(&self) -> u32 {
-        Instant::now().duration_since(self.start).as_millis() as u32
-    }
-}
-
-impl<TIMER, PERI> VM<TIMER, PERI>
+impl<FFI_GEN, RT> VM<FFI_GEN, RT>
 where
-    TIMER: TimerMs,
+    FFI_GEN: core::fmt::Debug + Clone + FFI<Self>,
 {
-    pub fn new(timer: TIMER, peripherals: PERI) -> Self {
+    pub fn new(runtime: RT) -> Self {
         Self {
             stack: heapless::Vec::new(),
             return_stack: heapless::Vec::new(),
@@ -301,12 +126,8 @@ where
             globals: Map::new(),
             locals: heapless::Vec::new(),
             funcs: Map::new(),
-            timer,
-            peripherals,
+            runtime,
         }
-    }
-    pub fn time_millis(&self) -> u32 {
-        self.timer.time_millis()
     }
 
     pub fn dump_state(&self) {
@@ -322,7 +143,72 @@ where
         }
     }
 
-    pub fn add_func<P: AsRef<str>>(&mut self, name: impl AsRef<str>, params: &[P], stack: &[Cell]) {
+    fn binary_op(&mut self, op: BinOp) {
+        // TODO error propagation ("done" should not be an error...)
+        self.run().ok();
+        let y = self.pop().unwrap_val();
+        self.run().ok();
+        let x = self.pop().unwrap_val();
+
+        self.push(Cell::Val(op(x, y)));
+    }
+
+    fn eval(&mut self, op: &Op<FFI_GEN>) {
+        // println!("----");
+        // println!("eval {self:?}");
+        match op {
+            Op::ExitFn => {
+                self.exit_fn();
+            }
+            Op::Return => {
+                self.do_return();
+            }
+            Op::Nruter => {
+                // TODO: test
+                let cell = self.return_stack.pop().expect("return stack too empty");
+                self.stack.push(cell).expect("return stack too full");
+            }
+            Op::Call(name) => {
+                self.call_fn(name);
+            }
+            Op::Add => self.binary_op(|x, y| x + y),
+            Op::Sub => self.binary_op(|x, y| x - y),
+            Op::Mul => self.binary_op(|x, y| x * y),
+            Op::Div => self.binary_op(|x, y| x / y),
+            Op::Mod => self.binary_op(|x, y| x % y),
+            Op::And => self.binary_op(|x, y| x & y),
+            Op::Or => self.binary_op(|x, y| x | y),
+            Op::Pop => {
+                let _ = self.pop();
+            }
+
+            Op::GetVar(name) => self.push(Cell::Val(
+                *self
+                    .get_var(name)
+                    .expect(&format!("variable {name} not found")),
+            )),
+            Op::SetVar(name) => {
+                // TODO error propagation
+
+                self.run().ok();
+                let val = self.pop().unwrap_val();
+                self.set_var(name, val);
+            }
+            Op::DeclVar(name) => {
+                self.decl_var(name);
+            }
+            Op::FFI(ffi_fn) => ffi_fn.dispatch(&mut self),
+        }
+
+        // vm.dump_state();
+    }
+
+    pub fn add_func<P: AsRef<str>>(
+        &mut self,
+        name: impl AsRef<str>,
+        params: &[P],
+        stack: &[Cell<FFI_GEN>],
+    ) {
         let mut fn_stack = Stack::new();
         fn_stack.extend(stack.iter().cloned());
         let name = name.as_ref();
@@ -369,8 +255,8 @@ where
     pub fn decl_var(&mut self, name: impl AsRef<str>) {
         let name = name.as_ref().into();
 
-        let context = self.locals.last_mut().unwrap_or(&mut self.globals);
-        context
+        let storage = self.locals.last_mut().unwrap_or(&mut self.globals);
+        storage
             .insert(name, None)
             .expect("variable space exhausted");
     }
@@ -397,12 +283,6 @@ where
 
     pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
         *self.var_assign_slot(name) = Some(val);
-        // let name = name.as_ref().into();
-
-        // let context = self.locals.last_mut().unwrap_or(&mut self.globals);
-        // context
-        //     .insert(name, Some(val))
-        //     .expect("variable space exhausted");
     }
 
     pub fn get_var(&self, name: impl AsRef<str>) -> Option<&CellData> {
@@ -416,14 +296,14 @@ where
         res.expect(&format!("variable {name} not found")).as_ref()
     }
 
-    pub fn push(&mut self, i: Cell) {
+    pub fn push(&mut self, i: Cell<FFI_GEN>) {
         // println!("push {i:?}");
         if let Err(e) = self.stack.push(i) {
             err("stack too full");
         }
     }
 
-    pub fn pop(&mut self) -> Cell {
+    pub fn pop(&mut self) -> Cell<FFI_GEN> {
         let res = self.stack.pop();
         // println!("pop! {res:?}");
         if res.is_none() {
@@ -432,14 +312,14 @@ where
         res.unwrap()
     }
 
-    pub fn push_return(&mut self, i: Cell) {
+    pub fn push_return(&mut self, i: Cell<FFI_GEN>) {
         // println!("rpush {i:?}");
         if let Err(e) = self.return_stack.push(i) {
             err("return stack too full");
         }
     }
 
-    fn pop_return(&mut self) -> Cell {
+    fn pop_return(&mut self) -> Cell<FFI_GEN> {
         let res = self.return_stack.pop();
         if res.is_none() {
             err("return stack not full enough");
@@ -458,12 +338,10 @@ where
     }
 
     pub fn run(&mut self) -> Result<(), VMErr> {
-        // TODO meh, would rather not clone
-        while let Some(Cell::Op(op)) = self.stack.last().cloned() {
-            self.stack.pop();
+        while let Some(Cell::Op(op)) = self.stack.pop() {
             trace!("running {op:?}");
             self.dump_state();
-            op.eval(self);
+            self.eval(&op);
 
             trace!("{op:?} done\n------------------------");
         }
@@ -515,46 +393,31 @@ where
         res
     }
 
-    pub fn stack(&self) -> &[Cell] {
+    pub fn stack(&self) -> &[Cell<FFI_GEN>] {
         self.stack.as_ref()
     }
-}
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
-pub enum FFI {
-    ConsoleLog1,
-    Sin,
-    Time,
-    Wave,
-    Abs,
-    Hsv,
-}
 
-fn console_log(s: &str) {
-    println!("[VM::LOG] {s}")
+    pub fn runtime_mut(&mut self) -> &mut RT {
+        &mut self.runtime
+    }
+
+    pub fn runtime(&self) -> &RT {
+        &self.runtime
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::forth::util::{assert_similar, vm};
+    use crate::{forth::util::assert_similar, pixelblaze::funcs::PixelBlazeFFI};
 
     #[test]
     fn test_str() -> anyhow::Result<()> {
-        let mut vm = VM::new(StdTimer::new(), ConsolePeripherals);
+        let mut vm = VM::new(ConsolePeripherals);
         let s = "⭐hello, vm!⭐";
         vm.push_str(s);
         assert_eq!(vm.get_str().as_ref(), s);
 
-        Ok(())
-    }
-
-    #[test]
-    fn test_ffi() -> anyhow::Result<()> {
-        let mut vm = vm();
-        vm.push(Cell::from(-5i32));
-        vm.push(Op::FFI(FFI::Abs).into());
-        vm.run();
-        assert_eq!(&[Cell::from(5i32)], &vm.stack);
         Ok(())
     }
 
@@ -569,29 +432,12 @@ mod tests {
         vm.push(Cell::Op(Op::Mul));
 
         let ser: heapless::Vec<u8, 128> = postcard::to_vec(&vm)?;
-        let mut de: VM<StdTimer, ConsolePeripherals> = postcard::from_bytes(&ser)?;
+        let mut de: VM<ConsolePeripherals> = postcard::from_bytes(&ser)?;
 
         de.run();
         de.do_return();
         assert_eq!(&[Cell::val(90)], &de.return_stack);
         assert_eq!(&[], &de.stack);
-        Ok(())
-    }
-
-    #[test]
-    fn test_sin() -> anyhow::Result<()> {
-        let mut vm = vm();
-
-        let param = 0.1f64;
-        vm.push(Cell::val(param));
-        vm.push(Cell::Op(Op::FFI(FFI::Sin)));
-
-        vm.run();
-
-        let precise: f64 = param.sin();
-        let approximate = vm.stack.pop().unwrap().unwrap_val();
-
-        assert_similar(precise, approximate, 1);
         Ok(())
     }
 }

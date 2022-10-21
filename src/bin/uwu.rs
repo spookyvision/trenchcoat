@@ -97,18 +97,18 @@ mod vis0r {
 
     use phf::phf_map;
     use pixelblaze_rs::forth::bytecode::{
-        Cell, CellData, ConsolePeripherals, Op, StdTimer, FFI, VM,
+        Cell, CellData, ConsolePeripherals, Op, PixelBlazeFFI, StdTimer, VM,
     };
     use swc_ecma_ast::*;
     use swc_ecma_utils::ExprExt;
     use swc_ecma_visit::Visit;
 
-    static FUNCS: phf::Map<&'static str, FFI> = phf_map! {
-        "console_log" => FFI::ConsoleLog1,
-        "sin" => FFI::Sin,
-        "time" => FFI::Time,
-        "wave" => FFI::Wave,
-        "hsv" => FFI::Hsv,
+    static FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf_map! {
+        "console_log" => PixelBlazeFFI::ConsoleLog1,
+        "sin" => PixelBlazeFFI::Sin,
+        "time" => PixelBlazeFFI::Time,
+        "wave" => PixelBlazeFFI::Wave,
+        "hsv" => PixelBlazeFFI::Hsv,
     };
 
     pub struct Vis0r<T, P> {
