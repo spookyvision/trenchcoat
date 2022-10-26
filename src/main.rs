@@ -80,19 +80,20 @@ fn to_quit(cmd: &str) -> bool {
 }
 
 fn run_forth() {
-    let mut env = forth::env::ForthEnv::empty();
-    let intr = forth::inter::Interpreter::new();
+    todo!();
+    // let mut env = forth::env::ForthEnv::empty();
+    // let intr = forth::inter::Interpreter::new();
 
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let mut input = line.unwrap();
-        input = input.trim().to_string();
+    // let stdin = io::stdin();
+    // for line in stdin.lock().lines() {
+    //     let mut input = line.unwrap();
+    //     input = input.trim().to_string();
 
-        if to_quit(&input) {
-            println!("Bye!");
-            return;
-        } else {
-            intr.eval(&mut env, &input);
-        }
-    }
+    //     if to_quit(&input) {
+    //         println!("Bye!");
+    //         return;
+    //     } else {
+    //         intr.eval(&mut env, &input);
+    //     }
+    // }
 }

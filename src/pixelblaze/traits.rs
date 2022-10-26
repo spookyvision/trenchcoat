@@ -1,15 +1,12 @@
-use crate::forth::bytecode::CellData;
-
-pub trait TimerMs {
-    fn time_millis(&self) -> u32;
-}
+use crate::forth::{bytecode::CellData, runtime::CoreRuntime};
 
 pub trait Peripherals {
     fn led_begin(&mut self) {}
-    fn led_hsv(&mut self, idx: CellData, h: CellData, s: CellData, v: CellData);
+    fn set_led_idx(&mut self, idx: usize);
+    fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData);
     fn led_commit(&mut self) {}
 }
 
-pub trait PixelBlazeRuntime: TimerMs + Peripherals {}
+pub trait PixelBlazeRuntime: CoreRuntime + Peripherals {}
 
-impl<RT> PixelBlazeRuntime for RT where RT: Peripherals + TimerMs {}
+impl<RT> PixelBlazeRuntime for RT where RT: CoreRuntime + Peripherals {}

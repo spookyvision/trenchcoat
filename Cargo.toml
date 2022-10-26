@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+use-std = []
+default = ["use-std"]
+
 [dependencies]
 axum = "0.5.16"
 futures = "0.3.24"
@@ -31,6 +35,8 @@ fixed = { version = "1.19.0", features = ["serde","num-traits"] }
 cordic = "0.1.5"
 log = "0.4.17"
 pretty_env_logger = "0.4.0"
+thiserror = "1.0.37"
+divrem = "1.0.0"
 
 [dev-dependencies]
 #anyhow = "1.0.65"

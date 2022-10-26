@@ -1,10 +1,6 @@
-use super::{
-    funcs::PixelBlazeFFI,
-    std::{Runtime, StdTimer},
-    traits::PixelBlazeRuntime,
-};
+use super::{funcs::PixelBlazeFFI, runtime::ConsoleRuntime, traits::PixelBlazeRuntime};
 use crate::forth::bytecode::VM;
 
-pub fn vm() -> VM<PixelBlazeFFI, Runtime> {
-    VM::new(Runtime::default())
+pub(crate) fn vm() -> VM<PixelBlazeFFI, ConsoleRuntime> {
+    VM::new_empty(ConsoleRuntime::default())
 }

@@ -1,5 +1,4 @@
 pub mod bytecode;
 pub mod runtime;
-
-#[cfg(test)]
 pub mod util;
+pub mod vis0r;

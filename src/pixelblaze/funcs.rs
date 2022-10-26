@@ -1,20 +1,16 @@
-// t1 =  time(.1)
-// t2 = time(0.13)
-// }
-
-// export function render(index) {
-// c1 = 1-abs(index - hl)/hl
-// c2 = wave(c1)
-// c3 = wave(c2 + t1)
-// v = wave(c3 + t1)
-// v = v*v
-// hsv(c1 + t2,1,v)
-// }
-
+use phf::phf_map;
 use serde::{Deserialize, Serialize};
 
-use super::traits::{PixelBlazeRuntime, TimerMs};
-use crate::forth::bytecode::{Cell, CellData, FFI, VM};
+use super::traits::PixelBlazeRuntime;
+use crate::forth::bytecode::{Cell, CellData, FFIOps, Param, VMError};
+
+pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf_map! {
+    "console_log" => PixelBlazeFFI::ConsoleLog1,
+    "sin" => PixelBlazeFFI::Sin,
+    "time" => PixelBlazeFFI::Time,
+    "wave" => PixelBlazeFFI::Wave,
+    "hsv" => PixelBlazeFFI::Hsv,
+};
 
 pub const PI: CellData = CellData::unwrapped_from_str("3.141592653589793");
 pub const PI2: CellData = CellData::unwrapped_from_str("6.283185307179586");
@@ -29,62 +25,56 @@ pub enum PixelBlazeFFI {
     Hsv,
 }
 
-pub trait StackVM<FFI_GEN, STR> {
-    fn pop(&mut self) -> CellData;
-    fn get_str(&mut self) -> STR;
-    fn push(&mut self, i: Cell<FFI_GEN>);
-}
-
-impl<FFI_GEN, RT, VM_GEN, STR> FFI<VM_GEN> for PixelBlazeFFI
+impl<RT> FFIOps<RT> for PixelBlazeFFI
 where
     RT: PixelBlazeRuntime,
-    FFI_GEN: core::fmt::Debug + Clone,
-    VM_GEN: StackVM<FFI_GEN, STR>,
-    STR: AsRef<str>,
 {
-    fn dispatch(&self, vm: &mut VM<FFI_GEN, RT>) {
+    fn call_info(&self) -> &[Param] {
+        match self {
+            PixelBlazeFFI::ConsoleLog1 => &[Param::DynPacked],
+            PixelBlazeFFI::Hsv => &[Param::Normal, Param::Normal, Param::Normal],
+            _ => &[Param::Normal],
+        }
+    }
+
+    fn dispatch(&self, rt: &mut RT, params: &[Cell<Self>]) -> Result<Cell<Self>, VMError> {
+        let res;
         match self {
             PixelBlazeFFI::ConsoleLog1 => {
-                let str = vm.get_str();
-                console_log(str.as_ref());
+                let str = "TODO fwd to CoreRuntime somehow?";
+                rt.log(str.as_ref());
+                res = Cell::Null;
             }
             PixelBlazeFFI::Sin => {
-                vm.run().ok();
-                let top = vm.pop();
-                let res = cordic::sin(top.unwrap_val());
-                vm.push(Cell::Val(res));
+                let angle = CellData::try_from(&params[0])?;
+                let inner_res = cordic::sin(angle);
+                res = Cell::Val(inner_res);
             }
             PixelBlazeFFI::Time => {
-                vm.run().ok();
-                let top = vm.pop();
-                let res = time(top.unwrap_val(), *vm.runtime());
-                vm.push(Cell::Val(res));
+                let interval = CellData::try_from(&params[0])?;
+                let inner_res = time(interval, rt);
+                res = Cell::Val(inner_res);
             }
             PixelBlazeFFI::Wave => {
-                vm.run().ok();
-                let top = vm.pop();
-                let res = wave(top.unwrap_val());
-                vm.push(Cell::Val(res));
+                let arg = CellData::try_from(&params[0])?;
+                let inner_res = wave(arg);
+                res = Cell::Val(inner_res);
             }
             PixelBlazeFFI::Abs => {
-                vm.run().ok();
-                let top = vm.pop();
-                let res = abs(top.unwrap_val());
-                vm.push(Cell::Val(res));
+                let arg = CellData::try_from(&params[0])?;
+                let inner_res = abs(arg);
+                res = Cell::Val(inner_res);
             }
             PixelBlazeFFI::Hsv => {
-                vm.run().ok();
-                let v = vm.pop().unwrap_val();
-
-                vm.run().ok();
-                let s = vm.pop().unwrap_val();
-
-                vm.run().ok();
-                let h = vm.pop().unwrap_val();
-
-                hsv(h, s, v);
+                let h = CellData::try_from(&params[2])?;
+                let s = CellData::try_from(&params[1])?;
+                let v = CellData::try_from(&params[0])?;
+                rt.led_hsv(h, s, v);
+                res = Cell::Null;
             }
         }
+
+        Ok(res)
     }
 }
 
@@ -92,7 +82,7 @@ fn console_log(s: &str) {
     println!("[VM::LOG] {s}")
 }
 
-pub(crate) fn time(interval: CellData, runtime: impl PixelBlazeRuntime) -> CellData {
+pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> CellData {
     let now = CellData::from_num((runtime.time_millis() * 65) as u16);
     now * interval
 }
@@ -130,12 +120,12 @@ mod tests {
     }
 
     #[test]
-    fn test_ffi() -> anyhow::Result<()> {
+    fn test_abs() -> anyhow::Result<()> {
         let mut vm = vm();
         vm.push(Cell::from(-5i32));
         vm.push(Op::FFI(PixelBlazeFFI::Abs).into());
         vm.run();
-        assert_eq!(&[Cell::from(5i32)], &vm.stack);
+        assert_eq!(&[Cell::from(5i32)], vm.stack());
         Ok(())
     }
 
@@ -150,7 +140,7 @@ mod tests {
         vm.run();
 
         let precise: f64 = param.sin();
-        let approximate = vm.stack.pop().unwrap().unwrap_val();
+        let approximate = vm.pop_unchecked().unwrap_val();
 
         assert_similar(precise, approximate, 1);
         Ok(())
