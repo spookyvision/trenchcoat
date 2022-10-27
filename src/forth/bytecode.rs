@@ -1,7 +1,7 @@
 use core::{fmt::Debug, str::from_utf8};
 
 use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
-use log::trace;
+use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -59,13 +59,18 @@ pub enum VMError {
     FFI(#[from] FFIError),
     #[error("Malformed stack")]
     Malformed,
+    #[error("Stack underflow")]
+    Underflow,
+    #[error("Stack overflow")]
+    Overflow,
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
 pub enum Op<FFI> {
     Return, // data stack -> return stack
     Nruter, // return stack -> data stack
-    ExitFn,
+    ExitFn, // TODO never used, remove/change?
+    PopRet, // pop return stack
     Add,
     Sub,
     Mul,
@@ -203,14 +208,14 @@ where
     }
 
     pub fn dump_state(&self) {
-        log::debug!("stack: {:?}", self.stack);
-        log::debug!("rstack: {:?}", self.return_stack);
-        log::debug!("globals: {:?}", self.globals);
-        log::debug!("locals: {:?}", self.locals);
+        debug!("stack: {:?}", self.stack);
+        debug!("rstack: {:?}", self.return_stack);
+        debug!("globals: {:?}", self.globals);
+        debug!("locals: {:?}", self.locals);
         let debug_funcs = true;
         if debug_funcs {
             for (name, def) in &self.funcs {
-                log::debug!("F {name} => {def:?}")
+                debug!("F {name} => {def:?}")
             }
         }
     }
@@ -235,13 +240,17 @@ where
             Op::ExitFn => {
                 self.exit_fn();
             }
+            Op::PopRet => {
+                self.return_stack.pop().ok_or(VMError::Underflow)?;
+            }
             Op::Return => {
                 self.do_return();
             }
+            // TODO: test
             Op::Nruter => {
-                // TODO: test
-                let cell = self.return_stack.pop().expect("return stack too empty");
-                self.stack.push(cell).expect("return stack too full");
+                let cell = self.return_stack.pop().ok_or(VMError::Underflow)?;
+                // TODO make self.pop() return Result<>
+                self.stack.push(cell).map_err(|_| VMError::Overflow)?;
             }
             Op::Call(name) => {
                 self.call_fn(name);
@@ -262,8 +271,11 @@ where
             Op::SetVar(name) => {
                 // TODO error propagation
 
+                // dbg!("setvar start:", name);
                 self.run().ok();
+                // dbg!("setvar: end run");
                 let val = self.pop_unchecked().unwrap_val();
+                // dbg!("setvar", val);
                 self.set_var(name, val);
             }
             Op::DeclVar(name) => {
@@ -292,12 +304,14 @@ where
                         }
                     }
                 }
-                // dbg!("params", params);
+                // dbg!(ffi_fn, &params);
                 let res = ffi_fn
                     .dispatch(&mut self.runtime, &params)
                     .and_then(|ffi_res| {
                         // TODO error propagation
-                        self.stack.push(ffi_res);
+                        self.return_stack.push(ffi_res);
+                        // self.run(); // do something with the returned value
+                        self.dump_state();
                         Ok(())
                     });
 
@@ -467,7 +481,7 @@ where
 
     pub fn push_str(&mut self, s: impl AsRef<str>) {
         let s = s.as_ref();
-        log::debug!("push str {s:?}");
+        debug!("push str {s:?}");
         let bytes = s.as_bytes();
         let valid_bytes_len = bytes.len();
 

@@ -20,9 +20,10 @@ fn main() -> anyhow::Result<()> {
 
     // let fm = cm.new_source_file(FileName::Custom("fake file.js".into()), js.into());
 
-    let fm = cm
-        .load_file(Path::new("res/rainbow melt.js"))
-        .expect("failed to load");
+    let file = "res/rainbow melt.js";
+    // let file = "res/test_ffi.js";
+
+    let fm = cm.load_file(Path::new(file)).expect("failed to load");
     let lexer = Lexer::new(
         // We want to parse ecmascript
         Syntax::Es(Default::default()),
@@ -50,15 +51,18 @@ fn main() -> anyhow::Result<()> {
         );
         dbg!(&module);
         v.visit_module(&module);
-        return Ok(());
+        // return Ok(());
 
         let vm = v.into_vm(ConsoleRuntime::default());
         let pixel_count = 4;
 
         let mut executor = Executor::new(vm, pixel_count);
         executor.start();
-        executor.do_frame();
-        executor.do_frame();
+
+        for _frame in 0..5 {
+            executor.do_frame();
+        }
+
         println!("\n*** DÖNE ***\n");
     }
 

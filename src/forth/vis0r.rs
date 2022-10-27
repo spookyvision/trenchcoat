@@ -88,6 +88,11 @@ where
             Expr::SuperProp(_) => todo!(),
             Expr::Cond(_) => todo!(),
             Expr::Call(call_expr) => {
+                if !self.inside_assignment {
+                    self.stack.push(Op::PopRet.into());
+                } else {
+                    self.stack.push(Op::Nruter.into());
+                }
                 for arg in &call_expr.args {
                     self.eval_expr(&arg.expr);
                 }
@@ -221,7 +226,6 @@ where
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         let name = n.ident.sym.as_ref();
         let mut child_visor: Vis0r<_, RT> = Vis0r::new(self.ffi_defs.clone());
-
         let func = &n.function;
 
         // add implicit return
@@ -283,12 +287,14 @@ where
             let name = var_name(&decl.name);
 
             println!("\ndecl {name} = ");
-            self.stack.push(Op::DeclVar(name.into()).into());
 
             if let Some(init) = decl.init.as_deref() {
+                self.inside_assignment = true;
                 self.eval_expr(init);
+                self.inside_assignment = false;
                 self.stack.push(Op::SetVar(name.into()).into());
             }
+            self.stack.push(Op::DeclVar(name.into()).into());
 
             println!("</decl {name}>");
         }

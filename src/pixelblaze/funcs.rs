@@ -83,16 +83,12 @@ fn console_log(s: &str) {
 }
 
 pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> CellData {
-    let now = CellData::from_num((runtime.time_millis() * 65) as u16);
-    now * interval
+    let now = CellData::from_num((runtime.time_millis() % 1000) * 65);
+    (now * interval) / 1000
 }
 
 pub(crate) fn abs(val: CellData) -> CellData {
     val.abs()
-}
-
-pub(crate) fn hsv(h: CellData, s: CellData, v: CellData) {
-    println!("set hsv! {h:?}, {s:?}, {v:?}");
 }
 
 pub(crate) fn sin(val: CellData) -> CellData {
