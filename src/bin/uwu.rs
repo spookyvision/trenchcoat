@@ -1,19 +1,19 @@
 use std::{collections::HashMap, path::Path};
 
 use pixelblaze_rs::{
-    forth::vis0r::Vis0r,
-    pixelblaze::{executor::Executor, funcs::FFI_FUNCS, runtime::ConsoleRuntime},
+    forth::compiler::Compiler,
+    pixelblaze::{executor::Executor, ffi::FFI_FUNCS, runtime::ConsoleRuntime},
 };
 use swc_common::{
     errors::{ColorConfig, Handler},
     sync::Lrc,
-    FileName, SourceMap,
+    SourceMap,
 };
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::Visit;
 
 // what's this?
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     let cm: Lrc<SourceMap> = Default::default();
     let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
@@ -43,7 +43,7 @@ fn main() -> anyhow::Result<()> {
         // Unrecoverable fatal error occurred
         e.into_diagnostic(&handler).emit()
     }) {
-        let mut v = Vis0r::new(
+        let mut v = Compiler::new(
             FFI_FUNCS
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), *v))
@@ -51,7 +51,6 @@ fn main() -> anyhow::Result<()> {
         );
         dbg!(&module);
         v.visit_module(&module);
-        // return Ok(());
 
         let vm = v.into_vm(ConsoleRuntime::default());
         let pixel_count = 4;
@@ -63,7 +62,7 @@ fn main() -> anyhow::Result<()> {
             executor.do_frame();
         }
 
-        println!("\n*** DÖNE ***\n");
+        executor.exit();
     }
 
     Ok(())

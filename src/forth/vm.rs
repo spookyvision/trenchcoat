@@ -1,4 +1,4 @@
-use core::{fmt::Debug, str::from_utf8};
+use core::fmt::Debug;
 
 use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
 use log::{debug, trace};
@@ -116,9 +116,6 @@ impl<FFI> From<Op<FFI>> for Cell<FFI> {
 }
 
 impl<FFI> Cell<FFI> {
-    pub(crate) fn val(num: impl ToFixed) -> Self {
-        Self::Val(num.to_fixed())
-    }
     pub(crate) fn unwrap_val(&self) -> CellData {
         match self {
             Cell::Val(val) => *val,
@@ -297,6 +294,7 @@ where
                             dbg!(param_len);
                             let stack_len = self.stack.len();
 
+                            trace!("{stack_len} {param_len}");
                             let param_start = stack_len - param_len;
 
                             params.extend(self.stack[param_start..].iter().cloned());
@@ -438,7 +436,7 @@ where
 
     pub fn push_return(&mut self, i: Cell<FFI>) {
         // println!("rpush {i:?}");
-        if let Err(e) = self.return_stack.push(i) {
+        if let Err(_e) = self.return_stack.push(i) {
             err("return stack too full");
         }
     }
@@ -479,54 +477,6 @@ where
         Err(VMError::FixmeNotAnErrorExhausted)
     }
 
-    pub fn push_str(&mut self, s: impl AsRef<str>) {
-        let s = s.as_ref();
-        debug!("push str {s:?}");
-        let bytes = s.as_bytes();
-        let valid_bytes_len = bytes.len();
-
-        // TODO maybe we need chunks_exact
-        // let chonky_boytes = bytes.chunks_exact(4);
-        // let remainder = chonky_boytes.remainder();
-        let chonky_boytes = bytes.chunks(4);
-        for item in chonky_boytes {
-            let i = CellData::from_le_bytes(<[u8; 4]>::try_from(item).expect("unreachable"));
-            self.push(Cell::Val(i));
-        }
-        // let mut remaining_chonk = [0u8; 4];
-        // remaining_chonk[0..remainder.len()].copy_from_slice(remainder);
-        // self.push(Cell::Val(CellData::from_le_bytes(remaining_chonk)));
-        self.push(Cell::Val(CellData::from_num(valid_bytes_len)));
-    }
-
-    pub fn get_str(&mut self) -> impl AsRef<str> {
-        let stack = &mut self.stack;
-        let string_bytes_len: usize = stack
-            .pop()
-            .expect("could not read string length: stack is empty")
-            .unwrap_val()
-            .to_num();
-        let stack_items_len = (string_bytes_len >> 2) + 1;
-        let stack_slice = stack.as_slice();
-        let string_start = stack.len() - stack_items_len;
-        let almost_string_stack = &stack_slice[string_start..][..stack_items_len];
-
-        let res = &mut [0u8; 32];
-
-        for (i, packed_bytes) in almost_string_stack
-            .iter()
-            .map(|elem| elem.unwrap_val())
-            .enumerate()
-        {
-            res[i * 4..][..4].copy_from_slice(&packed_bytes.to_le_bytes());
-        }
-
-        stack.truncate(string_start);
-        let stack_str = from_utf8(&res[..string_bytes_len]).unwrap_or("<err>");
-        let res: heapless::String<32> = stack_str.into();
-        res
-    }
-
     pub fn stack(&self) -> &[Cell<FFI>] {
         self.stack.as_ref()
     }
@@ -543,7 +493,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{forth::util::assert_similar, pixelblaze::funcs::PixelBlazeFFI};
+    use crate::{forth::util::assert_similar, pixelblaze::ffi::PixelBlazeFFI};
 
     #[test]
     fn test_serde() -> anyhow::Result<()> {

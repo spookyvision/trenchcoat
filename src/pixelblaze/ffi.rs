@@ -1,11 +1,16 @@
+use core::str::from_utf8;
+
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
 
 use super::traits::PixelBlazeRuntime;
-use crate::forth::bytecode::{Cell, CellData, FFIOps, Param, VMError};
+use crate::forth::{
+    util::StackSlice,
+    vm::{Cell, CellData, FFIOps, Param, VMError},
+};
 
 pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf_map! {
-    "console_log" => PixelBlazeFFI::ConsoleLog1,
+    "console_log" => PixelBlazeFFI::ConsoleLog,
     "sin" => PixelBlazeFFI::Sin,
     "time" => PixelBlazeFFI::Time,
     "wave" => PixelBlazeFFI::Wave,
@@ -17,7 +22,7 @@ pub const PI2: CellData = CellData::unwrapped_from_str("6.283185307179586");
 
 #[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum PixelBlazeFFI {
-    ConsoleLog1,
+    ConsoleLog,
     Sin,
     Time,
     Wave,
@@ -31,7 +36,7 @@ where
 {
     fn call_info(&self) -> &[Param] {
         match self {
-            PixelBlazeFFI::ConsoleLog1 => &[Param::DynPacked],
+            PixelBlazeFFI::ConsoleLog => &[Param::DynPacked],
             PixelBlazeFFI::Hsv => &[Param::Normal, Param::Normal, Param::Normal],
             _ => &[Param::Normal],
         }
@@ -40,9 +45,11 @@ where
     fn dispatch(&self, rt: &mut RT, params: &[Cell<Self>]) -> Result<Cell<Self>, VMError> {
         let res;
         match self {
-            PixelBlazeFFI::ConsoleLog1 => {
-                let str = "TODO fwd to CoreRuntime somehow?";
-                rt.log(str.as_ref());
+            PixelBlazeFFI::ConsoleLog => {
+                let v: heapless::Vec<u8, 32> = StackSlice(params)
+                    .try_into()
+                    .map_err(|_| VMError::Malformed)?;
+                rt.log(from_utf8(&v).map_err(|_| VMError::Malformed)?);
                 res = Cell::Null;
             }
             PixelBlazeFFI::Sin => {
@@ -78,10 +85,6 @@ where
     }
 }
 
-fn console_log(s: &str) {
-    println!("[VM::LOG] {s}")
-}
-
 pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> CellData {
     let now = CellData::from_num((runtime.time_millis() % 1000) * 65);
     (now * interval) / 1000
@@ -103,7 +106,7 @@ pub(crate) fn wave(val: CellData) -> CellData {
 mod tests {
     use super::*;
     use crate::{
-        forth::{bytecode::Op, util::assert_similar},
+        forth::{util::assert_similar, vm::Op},
         pixelblaze::util::vm,
     };
     #[test]

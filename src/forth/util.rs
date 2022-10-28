@@ -1,4 +1,4 @@
-use super::bytecode::{Cell, CellData, VM};
+use super::vm::{Cell, CellData, VM};
 
 pub fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
     let fac = 10f64.powf(decimals as _);
@@ -54,7 +54,7 @@ impl<'a, T, const N: usize> TryFrom<StackSlice<'a, T>> for heapless::Vec<u8, N> 
     }
 }
 
-pub fn pack<'a, FFI: 'a>(slice: &'a [u8]) -> impl Iterator<Item = Cell<FFI>> + 'a {
+pub fn pack<'a, FFI: 'a>(slice: &'a [u8]) -> impl DoubleEndedIterator<Item = Cell<FFI>> + 'a {
     let len = slice.len();
     let packed = slice.chunks(4).into_iter().map(|chunk| {
         let mut dst = [0, 0, 0, 0];
@@ -74,8 +74,8 @@ mod tests {
 
     use super::*;
     use crate::forth::{
-        bytecode::{Cell, Op, Stack},
         runtime::{stud::TestRuntime, PureJSFFI},
+        vm::{Cell, Op, Stack},
     };
 
     #[test]

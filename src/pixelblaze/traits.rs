@@ -1,4 +1,4 @@
-use crate::forth::{bytecode::CellData, runtime::CoreRuntime};
+use crate::forth::{runtime::CoreRuntime, vm::CellData};
 
 pub trait Peripherals {
     fn led_begin(&mut self) {}

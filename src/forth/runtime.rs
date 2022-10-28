@@ -4,8 +4,8 @@ use fixed::traits::ToFixed;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    bytecode::{Cell, CellData, FFIError, FFIOps, Param, VMError},
     util::StackSlice,
+    vm::{Cell, CellData, FFIError, FFIOps, Param, VMError},
 };
 pub trait CoreRuntime {
     fn time_millis(&mut self) -> u32;

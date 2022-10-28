@@ -5,12 +5,12 @@ use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
 use super::{
-    bytecode::{DefaultStack, FFIOps},
     runtime::CoreRuntime,
+    vm::{DefaultStack, FFIOps},
 };
-use crate::forth::bytecode::{Cell, CellData, FuncDef, Op, Stack, VM};
+use crate::forth::vm::{Cell, CellData, FuncDef, Op, VM};
 
-pub struct Vis0r<FFI, RT> {
+pub struct Compiler<FFI, RT> {
     stack: DefaultStack<FFI>,
     func_defs: HashMap<String, FuncDef<FFI>>,
     ffi_defs: HashMap<String, FFI>,
@@ -18,7 +18,7 @@ pub struct Vis0r<FFI, RT> {
     _rt: PhantomData<RT>,
 }
 
-impl<FFI, RT> Vis0r<FFI, RT>
+impl<FFI, RT> Compiler<FFI, RT>
 where
     RT: CoreRuntime,
     FFI: FFIOps<RT> + Copy,
@@ -207,7 +207,7 @@ where
         }
     }
 
-    pub fn into_vm(mut self, rt: RT) -> VM<FFI, RT> {
+    pub fn into_vm(self, rt: RT) -> VM<FFI, RT> {
         // TODO this is nonsense, maybe removing `vm` from the visitor wasn't such a smart idea after all
         // but what about the runtime param then...
         let mut vm = VM::new(self.stack, Default::default(), rt);
@@ -218,14 +218,14 @@ where
     }
 }
 
-impl<FFI, RT> Visit for Vis0r<FFI, RT>
+impl<FFI, RT> Visit for Compiler<FFI, RT>
 where
     RT: CoreRuntime,
     FFI: FFIOps<RT> + Copy + Clone,
 {
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         let name = n.ident.sym.as_ref();
-        let mut child_visor: Vis0r<_, RT> = Vis0r::new(self.ffi_defs.clone());
+        let mut child_visor: Compiler<_, RT> = Compiler::new(self.ffi_defs.clone());
         let func = &n.function;
 
         // add implicit return

@@ -1,5 +1,5 @@
 pub mod executor;
-pub mod funcs;
+pub mod ffi;
 pub mod runtime;
 pub mod traits;
 pub mod util;

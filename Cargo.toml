@@ -3,40 +3,33 @@ name = "pixelblaze-rs"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# strictly speaking we're using workspace.dependencies which is a *cargo* feature, not *Rust*
+rust-version = "1.64"
 
 [features]
 use-std = []
+desktop = ["use-std", "dep:pretty_env_logger", "parse"]
+parse = ["dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
 default = ["use-std"]
 
 [dependencies]
-axum = "0.5.16"
-futures = "0.3.24"
 heapless = "0.7.16"
 postcard = "1.0.2"
 serde = { version = "1.0.145", features = ["derive"] }
-tokio = { version = "1.21.2", features = ["macros", "full", "tracing"] }
-tower-http = { version = "0.3.4", features = ["tracing", "trace"] }
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 
+swc_common = { version = "0.29", features = ["termcolor", "tty-emitter"], optional = true }
+swc_ecma_ast = { version = "0.94", optional = true}
+swc_ecma_parser = { version = "0.122", features = ["debug", "swc_ecma_visit"], optional = true }
+swc_ecma_utils = { version = "0.105", optional = true}
+swc_ecma_visit = { version = "0.80", features = ["debug"], optional = true }
 
-# TODO separate crate
-swc_common = { version = "0.29", features = ["termcolor", "tty-emitter"] }
-#swc_core = { version = "0.23.13", features = ["swc_ecma_visit", "swc_ecma_utils", "swc_ecma_parser"] }
-swc_ecma_ast = "0.94"
-swc_ecma_parser = { version = "0.122", features = ["debug", "swc_ecma_visit"] }
-swc_ecma_utils = "0.105"
-swc_ecma_visit = { version = "0.80", features = ["debug"] }
-
-anyhow = "1.0.65"
 phf = { version = "0.11.1", features = ["macros"] }
 fixed = { version = "1.19.0", features = ["serde","num-traits"] }
 cordic = "0.1.5"
 log = "0.4.17"
-pretty_env_logger = "0.4.0"
+pretty_env_logger = { version = "0.4.0", optional = true}
 thiserror = "1.0.37"
 divrem = "1.0.0"
 
 [dev-dependencies]
-#anyhow = "1.0.65"
+anyhow = "1.0.65"

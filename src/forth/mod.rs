@@ -1,4 +1,4 @@
-pub mod bytecode;
+pub mod compiler;
 pub mod runtime;
 pub mod util;
-pub mod vis0r;
+pub mod vm;

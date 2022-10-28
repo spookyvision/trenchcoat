@@ -1,7 +1,7 @@
 // TODO WasmRuntime hsv console.log blah
 
 use super::traits::Peripherals;
-use crate::forth::{bytecode::CellData, runtime::CoreRuntime};
+use crate::forth::{runtime::CoreRuntime, vm::CellData};
 
 pub struct ConsoleRuntime {
     time_ms: u32,
