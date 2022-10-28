@@ -8,12 +8,13 @@ rust-version = "1.60"
 
 [workspace]
 members = ["console-app"]
+exclude = ["web-app"]
 
 [features]
 use-std = []
 console = ["swc_common?/termcolor", "swc_common?/tty-emitter"]
 desktop = ["use-std", "parse", "console"]
-parse = ["dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
+parse = ["use-std", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
 default = ["use-std"]
 
 [dependencies]

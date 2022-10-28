@@ -27,17 +27,17 @@ impl Default for ConsoleRuntime {
 
 impl Peripherals for ConsoleRuntime {
     fn led_begin(&mut self) {
-        println!("LED begin");
+        log::debug!("LED begin");
     }
 
     fn led_commit(&mut self) {
-        println!("LED commit");
-        println!("inc time by {}ms", self.dt);
+        log::debug!("LED commit");
+        log::debug!("inc time by {}ms", self.dt);
         self.time_ms += self.dt;
     }
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
-        println!("LED[{}] HSV({h},{s},{v})", self.led_idx);
+        log::debug!("LED[{}] HSV({h},{s},{v})", self.led_idx);
     }
 
     fn set_led_idx(&mut self, idx: usize) {
@@ -51,6 +51,6 @@ impl CoreRuntime for ConsoleRuntime {
     }
 
     fn log(&mut self, s: &str) {
-        println!("[LOG] {s}");
+        log::debug!("[LOG] {s}");
     }
 }

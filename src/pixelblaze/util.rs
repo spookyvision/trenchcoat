@@ -1,7 +1,6 @@
-use super::{ffi::PixelBlazeFFI, runtime::ConsoleRuntime, traits::PixelBlazeRuntime};
+use super::{ffi::PixelBlazeFFI, runtime::ConsoleRuntime};
 use crate::forth::vm::{CellData, VM};
 
-pub fn cook_hue(h: CellData) -> CellData {
-    let parts: i32 = h.to_num();
-    h
+pub(crate) fn vm() -> VM<PixelBlazeFFI, ConsoleRuntime> {
+    VM::new_empty(ConsoleRuntime::default())
 }

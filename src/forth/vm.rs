@@ -116,6 +116,9 @@ impl<FFI> From<Op<FFI>> for Cell<FFI> {
 }
 
 impl<FFI> Cell<FFI> {
+    pub(crate) fn val(num: impl ToFixed) -> Self {
+        Self::Val(num.to_fixed())
+    }
     pub(crate) fn unwrap_val(&self) -> CellData {
         match self {
             Cell::Val(val) => *val,
@@ -133,7 +136,7 @@ impl<FFI> Cell<FFI> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct FuncDef<FFI> {
     params: heapless::Vec<VarString, 4>,
     stack: DefaultStack<FFI>,
@@ -160,8 +163,12 @@ impl<FFI> FuncDef<FFI> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct VM<FFI, RT> {
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct VM<FFI, RT>
+where
+    FuncDef<FFI>: core::cmp::Eq,
+    FFI: core::cmp::Eq,
+{
     stack: DefaultStack<FFI>,
     return_stack: Stack<FFI, 4>,
     return_addr: Option<usize>,
@@ -174,7 +181,8 @@ pub struct VM<FFI, RT> {
 
 impl<FFI, RT> VM<FFI, RT>
 where
-    FFI: FFIOps<RT>,
+    FFI: FFIOps<RT> + core::cmp::Eq,
+    FuncDef<FFI>: core::cmp::Eq,
 {
     pub fn new_empty(runtime: RT) -> Self {
         Self {
@@ -485,7 +493,7 @@ where
         &mut self.runtime
     }
 
-    pub fn runtime(&mut self) -> &RT {
+    pub fn runtime(&self) -> &RT {
         &self.runtime
     }
 }

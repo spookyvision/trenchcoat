@@ -1,10 +1,11 @@
 use super::{ffi::PixelBlazeFFI, traits::PixelBlazeRuntime};
 use crate::forth::{
     util::pack,
-    vm::{Cell, CellData, FFIOps, Op, VM},
+    vm::{Cell, CellData, Op, VM},
 };
 
-pub struct Executor<FFI, RT> {
+#[derive(Clone, PartialEq)]
+pub struct Executor<FFI: core::cmp::Eq, RT> {
     vm: VM<FFI, RT>,
     pixel_count: usize,
     last_millis: u32,
@@ -70,5 +71,13 @@ where
             vm.pop_unchecked(); // toss away implicitly returned null
         }
         vm.runtime_mut().led_commit();
+    }
+
+    pub fn pixel_count(&self) -> usize {
+        self.pixel_count
+    }
+
+    pub fn runtime(&self) -> &RT {
+        self.vm.runtime()
     }
 }

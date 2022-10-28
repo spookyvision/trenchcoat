@@ -21,7 +21,7 @@ pub struct Compiler<FFI, RT> {
 impl<FFI, RT> Compiler<FFI, RT>
 where
     RT: CoreRuntime,
-    FFI: FFIOps<RT> + Copy,
+    FFI: FFIOps<RT> + Copy + core::cmp::Eq,
 {
     pub fn new(ffi_defs: HashMap<String, FFI>) -> Self {
         Self {
@@ -159,7 +159,7 @@ where
                         let bytes = s.as_bytes();
                         let valid_bytes_len = bytes.len();
 
-                        // TODO maybe we need chunks_exact
+                        // TODO use existing util func
                         // let chonky_boytes = bytes.chunks_exact(4);
                         let chonky_boytes = bytes.chunks(4);
 
@@ -221,7 +221,7 @@ where
 impl<FFI, RT> Visit for Compiler<FFI, RT>
 where
     RT: CoreRuntime,
-    FFI: FFIOps<RT> + Copy + Clone,
+    FFI: FFIOps<RT> + Copy + Clone + core::cmp::Eq,
 {
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         let name = n.ident.sym.as_ref();
