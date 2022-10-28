@@ -6,12 +6,12 @@ edition = "2021"
 # dep: feature syntax is 1.60+
 rust-version = "1.60"
 
-[workspace]
-members = ["console-app"]
-exclude = ["web-app"]
+#[workspace]
+#members = ["console-app"]
+#exclude = ["web-app", "stm32f4-app"]
 
 [features]
-use-std = []
+use-std = ["thiserror"]
 console = ["swc_common?/termcolor", "swc_common?/tty-emitter"]
 desktop = ["use-std", "parse", "console"]
 parse = ["use-std", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
@@ -20,7 +20,7 @@ default = ["use-std"]
 [dependencies]
 heapless = "0.7"
 postcard = "1.0"
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"], default-features = false }
 
 swc_common = { version = "0.29", features = [], optional = true }
 swc_ecma_ast = { version = "0.94", optional = true}
@@ -28,11 +28,11 @@ swc_ecma_parser = { version = "0.122", features = ["debug", "swc_ecma_visit"], o
 swc_ecma_utils = { version = "0.105", optional = true}
 swc_ecma_visit = { version = "0.80", features = ["debug"], optional = true }
 
-phf = { version = "0.11", features = ["macros"] }
+phf = { version = "0.11", features = ["macros"], default-features = false }
 fixed = { version = "1", features = ["serde","num-traits"] }
 cordic = "0.1"
 log = "0.4"
-thiserror = "1"
+thiserror = { version = "1", optional = true }
 divrem = "1"
 
 [dev-dependencies]

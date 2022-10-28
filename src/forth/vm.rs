@@ -3,7 +3,6 @@ use core::fmt::Debug;
 use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 pub type VarString = heapless::String<16>;
 pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
@@ -40,7 +39,8 @@ pub enum Param {
     DynPacked,
 }
 
-#[derive(Debug, Error, Serialize, Deserialize)]
+#[cfg_attr(feature = "use-std", derive(thiserror::Error))]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum FFIError {
     #[error("function not found")]
     FunctionNotFound,
@@ -48,7 +48,8 @@ pub enum FFIError {
     NumArgs,
 }
 
-#[derive(Debug, Error, Serialize, Deserialize)]
+#[cfg_attr(feature = "use-std", derive(thiserror::Error))]
+#[derive(Debug, Serialize, Deserialize)]
 
 pub enum VMError {
     #[error("FixmeNotAnErrorExhausted")]
