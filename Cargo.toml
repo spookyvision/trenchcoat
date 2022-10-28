@@ -1,5 +1,5 @@
 [package]
-name = "pixelblaze-rs"
+name = "trenchcoat"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,12 +7,12 @@ edition = "2021"
 rust-version = "1.60"
 
 [workspace]
-exclude = ["res"]
+members = ["console-app"]
 
 [features]
 use-std = []
 console = ["swc_common?/termcolor", "swc_common?/tty-emitter"]
-desktop = ["use-std", "parse", "console", "dep:pretty_env_logger"]
+desktop = ["use-std", "parse", "console"]
 parse = ["dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
 default = ["use-std"]
 
@@ -31,7 +31,6 @@ phf = { version = "0.11", features = ["macros"] }
 fixed = { version = "1", features = ["serde","num-traits"] }
 cordic = "0.1"
 log = "0.4"
-pretty_env_logger = { version = "0.4", optional = true}
 thiserror = "1"
 divrem = "1"
 

@@ -1,9 +1,5 @@
 use std::{collections::HashMap, path::Path};
 
-use pixelblaze_rs::{
-    forth::compiler::Compiler,
-    pixelblaze::{executor::Executor, ffi::FFI_FUNCS, runtime::ConsoleRuntime},
-};
 use swc_common::{
     errors::{ColorConfig, Handler},
     sync::Lrc,
@@ -11,17 +7,19 @@ use swc_common::{
 };
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_visit::Visit;
+use trenchcoat::{
+    forth::compiler::Compiler,
+    pixelblaze::{executor::Executor, ffi::FFI_FUNCS, runtime::ConsoleRuntime},
+    prelude::*,
+};
 
-// what's this?
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     let cm: Lrc<SourceMap> = Default::default();
     let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
 
-    // let fm = cm.new_source_file(FileName::Custom("fake file.js".into()), js.into());
-
-    let file = "res/rainbow melt.js";
-    // let file = "res/test_ffi.js";
+    let file = "../res/rainbow melt.js";
+    // let file = "../res/test_ffi.js";
 
     let fm = cm.load_file(Path::new(file)).expect("failed to load");
     let lexer = Lexer::new(

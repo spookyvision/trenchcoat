@@ -151,6 +151,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
 
 [[package]]
+name = "console-app"
+version = "0.1.0"
+dependencies = [
+ "pretty_env_logger",
+ "trenchcoat",
+]
+
+[[package]]
 name = "cordic"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -702,28 +710,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
 
 [[package]]
-name = "pixelblaze-rs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cordic",
- "divrem",
- "fixed",
- "heapless",
- "log",
- "phf",
- "postcard",
- "pretty_env_logger",
- "serde",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_parser",
- "swc_ecma_utils",
- "swc_ecma_visit",
- "thiserror",
-]
-
-[[package]]
 name = "pmutil"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1267,6 +1253,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "trenchcoat"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cordic",
+ "divrem",
+ "fixed",
+ "heapless",
+ "log",
+ "phf",
+ "postcard",
+ "serde",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_parser",
+ "swc_ecma_utils",
+ "swc_ecma_visit",
+ "thiserror",
 ]
 
 [[package]]
