@@ -76,7 +76,9 @@ where
                 let h = CellData::try_from(&params[2])?;
                 let s = CellData::try_from(&params[1])?;
                 let v = CellData::try_from(&params[0])?;
-                rt.led_hsv(h, s, v);
+
+                // pb spec says h wraps between 0..1
+                rt.led_hsv(h.frac(), s, v);
                 res = Cell::Null;
             }
         }
