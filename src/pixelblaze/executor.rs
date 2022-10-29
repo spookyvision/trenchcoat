@@ -5,7 +5,7 @@ use crate::forth::{
 };
 
 #[derive(Clone, PartialEq)]
-pub struct Executor<FFI: core::cmp::Eq, RT> {
+pub struct Executor<FFI: Eq, RT> {
     vm: VM<FFI, RT>,
     pixel_count: usize,
     last_millis: u32,

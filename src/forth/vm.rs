@@ -176,8 +176,8 @@ impl<FFI> FuncDef<FFI> {
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct VM<FFI, RT>
 where
-    FuncDef<FFI>: core::cmp::Eq,
-    FFI: core::cmp::Eq,
+    FuncDef<FFI>: PartialEq,
+    FFI: Eq,
 {
     stack: DefaultStack<FFI>,
     return_stack: Stack<FFI, 4>,
@@ -191,8 +191,8 @@ where
 
 impl<FFI, RT> VM<FFI, RT>
 where
-    FFI: FFIOps<RT> + core::cmp::Eq,
-    FuncDef<FFI>: core::cmp::Eq,
+    FFI: FFIOps<RT> + Eq,
+    FuncDef<FFI>: PartialEq,
 {
     pub fn new_empty(runtime: RT) -> Self {
         Self {

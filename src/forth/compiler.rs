@@ -219,7 +219,7 @@ where
 
 impl<FFI, RT> Visit for Compiler<FFI, RT>
 where
-    RT: Clone + Eq,
+    RT: Clone + PartialEq,
     FFI: FFIOps<RT> + Clone + Eq,
 {
     fn visit_fn_decl(&mut self, n: &FnDecl) {
