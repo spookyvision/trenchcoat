@@ -67,6 +67,7 @@ $browser http://localhost:8080/
 ## Acknowledgements
 - Forth-ish VM inspired by [forth-rs](https://github.com/dewaka/forth-rs) 
 - Abstract (`log`/`defmt`) logging macros courtesy of [dirbaio](https://github.com/Dirbaio) and [whitequark](https://github.com/whitequark)
+- Cool Bear™ by [fasterthanlime](https://fasterthanli.me/)
 
 ## Resources
 [Pixelblaze expression language](https://github.com/simap/pixelblaze/blob/master/README.expressions.md)
