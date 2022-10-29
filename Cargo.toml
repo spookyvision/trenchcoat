@@ -3,6 +3,13 @@ name = "trenchcoat"
 version = "0.1.0"
 edition = "2021"
 
+license-file = "LICENSE.txt"
+description = "JavaScript-ish virtual machine for embedded, LEDs, hot code reload, etc."
+homepage = "https://github.com/spookyvision/trenchcoat"
+repository = "https://github.com/spookyvision/trenchcoat"
+readme = "README.md"
+keywords = ["vm", "embedded", "pixelblaze", "javascript", "js", "smartleds", "questionable"]
+categories = ["embedded", "emulators", "no-std", "wasm"]
 # dep: feature syntax is 1.60+
 rust-version = "1.60"
 
