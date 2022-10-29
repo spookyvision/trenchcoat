@@ -97,11 +97,13 @@ mod app {
 
     #[task(shared=[executor])]
     fn frame(mut cx: frame::Context) {
-        let frame_interval_ms = 100u32;
+        let frame_interval_ms = 25u32;
         cx.shared.executor.lock(|executor| {
             executor.do_frame();
             let runtime = executor.runtime_mut();
-            runtime.step_ms(frame_interval_ms as i32);
+            // TODO /10 is a hack to make things look nicer,
+            // something in our calcs is probably bork
+            runtime.step_ms((frame_interval_ms / 10) as i32);
         });
         frame::spawn_after(frame_interval_ms.millis()).unwrap();
     }
