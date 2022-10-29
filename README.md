@@ -1,6 +1,6 @@
 # 3 languages in a trenchcoat
 
-A questionable mix of JavaScript (in syntax), FORTH (in spirit) and MicroPython (in terms of scope and being a wild mix of weird and kinda cool).
+A questionable combination of JavaScript (in syntax), FORTH (in spirit) and MicroPython (in terms of scope and being a wild mix of weird and kinda cool).
 
 ## Dear `$deity`, why?
 
