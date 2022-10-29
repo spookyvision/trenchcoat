@@ -91,7 +91,7 @@ fn compile<FFI, RT>(
     runtime: RT,
 ) -> Result<Vec<u8>, postcard::Error>
 where
-    FFI: FFIOps<RT> + Copy + PartialEq + serde::Serialize,
+    FFI: FFIOps<RT> + Copy + Eq + serde::Serialize,
     RT: Clone + PartialEq,
 {
     let mut v = Compiler::new(
