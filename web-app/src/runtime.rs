@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use trenchcoat::{
-    forth::{runtime::CoreRuntime, vm::CellData},
-    pixelblaze::traits::Peripherals,
+    forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
 };
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
@@ -52,7 +51,7 @@ impl Peripherals for WebRuntime {
     }
 }
 
-impl CoreRuntime for WebRuntime {
+impl VanillaJSRuntime for WebRuntime {
     fn time_millis(&mut self) -> u32 {
         let dt = Utc::now().signed_duration_since(self.started_at);
         dt.num_milliseconds() as u32
