@@ -17,7 +17,7 @@ cortex-m = "0.7"
 dwt-systick-monotonic = "1.0"
 fugit = "0.3"
 trenchcoat = { path = "..", features = ["defmt"], default-features = false}
-f4-peri = { path = "../../embedded/f4-peri" }
+f4-peri = { git = "https://github.com/spookyvision/f4-peri.git" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
 postcard = "1.0.2"
