@@ -8,7 +8,7 @@ description = "JavaScript-ish virtual machine for embedded, LEDs, hot code reloa
 homepage = "https://github.com/spookyvision/trenchcoat"
 repository = "https://github.com/spookyvision/trenchcoat"
 readme = "README.md"
-keywords = ["vm", "embedded", "pixelblaze", "javascript", "js", "smartleds", "questionable"]
+keywords = ["vm", "embedded", "pixelblaze", "javascript", "smartleds"]
 categories = ["embedded", "emulators", "no-std", "wasm"]
 # dep: feature syntax is 1.60+
 rust-version = "1.60"
