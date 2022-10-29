@@ -1,4 +1,4 @@
-use crate::forth::{runtime::CoreRuntime, vm::CellData};
+use crate::{forth::vm::CellData, vanillajs::runtime::VanillaJSRuntime};
 
 pub trait Peripherals {
     fn led_begin(&mut self) {}
@@ -10,6 +10,6 @@ pub trait Peripherals {
     fn led_commit(&mut self) {}
 }
 
-pub trait PixelBlazeRuntime: CoreRuntime + Peripherals {}
+pub trait PixelBlazeRuntime: VanillaJSRuntime + Peripherals {}
 
-impl<RT> PixelBlazeRuntime for RT where RT: CoreRuntime + Peripherals {}
+impl<RT> PixelBlazeRuntime for RT where RT: VanillaJSRuntime + Peripherals {}

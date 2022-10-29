@@ -1,5 +1,6 @@
 use super::vm::{Cell, CellData, VM};
 
+#[cfg(test)]
 pub fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
     let fac = 10f64.powf(decimals as _);
     let actual = (actual.to_num::<f64>() * fac).round() as i32;
@@ -73,15 +74,15 @@ mod tests {
     use std::error::Error;
 
     use super::*;
-    use crate::forth::{
-        runtime::{stud::TestRuntime, PureJSFFI},
-        vm::{Cell, Op, Stack},
+    use crate::{
+        forth::vm::{Cell, Op, Stack},
+        vanillajs::runtime::{stud::TestRuntime, VanillaJSFFI},
     };
 
     #[test]
     fn test_empty() -> Result<(), Box<dyn Error>> {
         let s = "";
-        let stack: Vec<Cell<PureJSFFI>> = pack(s.as_bytes()).collect();
+        let stack: Vec<Cell<VanillaJSFFI>> = pack(s.as_bytes()).collect();
         let v: heapless::Vec<u8, 32> = StackSlice(&stack).try_into()?;
         let de = from_utf8(v.as_slice())?;
         assert_eq!(de, s);
@@ -91,7 +92,7 @@ mod tests {
     #[test]
     fn test_str() -> Result<(), Box<dyn Error>> {
         let s = "∆ohai∆";
-        let stack: Vec<Cell<PureJSFFI>> = pack(s.as_bytes()).collect();
+        let stack: Vec<Cell<VanillaJSFFI>> = pack(s.as_bytes()).collect();
         let v: heapless::Vec<u8, 32> = StackSlice(&stack).try_into()?;
         let de = from_utf8(v.as_slice())?;
         assert_eq!(de, s);
@@ -101,8 +102,8 @@ mod tests {
     #[test]
     fn test_ffi() -> Result<(), Box<dyn Error>> {
         let s = "∆ohai∆";
-        let mut stack: Vec<Cell<PureJSFFI>> = pack(s.as_bytes()).collect();
-        stack.push(Cell::Op(Op::FFI(PureJSFFI::ConsoleLog)));
+        let mut stack: Vec<Cell<VanillaJSFFI>> = pack(s.as_bytes()).collect();
+        stack.push(Cell::Op(Op::FFI(VanillaJSFFI::ConsoleLog)));
         dbg!(&stack);
 
         let mut vm = VM::new(

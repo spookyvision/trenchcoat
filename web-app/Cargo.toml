@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-trenchcoat = { path = "..", features = ["parse"]}
+trenchcoat = { path = "..", features = ["compiler"]}
 chrono = { version = "0.4", features=["wasmbind"] }
 fermi = "0.2"
 gloo =  { version = "0.8", features = ["futures"] }

@@ -80,4 +80,8 @@ where
     pub fn runtime(&self) -> &RT {
         self.vm.runtime()
     }
+
+    pub fn runtime_mut(&mut self) -> &mut RT {
+        self.vm.runtime_mut()
+    }
 }

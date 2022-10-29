@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 
 use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
-use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 
 pub type VarString = heapless::String<16>;
@@ -42,9 +41,9 @@ pub enum Param {
 #[cfg_attr(feature = "use-std", derive(thiserror::Error))]
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FFIError {
-    #[error("function not found")]
+    #[cfg_attr(feature = "use-std", error("Function not found"))]
     FunctionNotFound,
-    #[error("wrong number of arguments")]
+    #[cfg_attr(feature = "use-std", error("Wrong number of arguments"))]
     NumArgs,
 }
 
@@ -52,18 +51,28 @@ pub enum FFIError {
 #[derive(Debug, Serialize, Deserialize)]
 
 pub enum VMError {
-    #[error("FixmeNotAnErrorExhausted")]
+    #[cfg_attr(feature = "use-std", error("FixmeNotAnErrorExhausted"))]
     FixmeNotAnErrorExhausted,
-    #[error("type coercion failed")]
+    #[cfg_attr(feature = "use-std", error("type coercion failed"))]
     TypeCoercion,
-    #[error("FFI bork")]
-    FFI(#[from] FFIError),
-    #[error("Malformed stack")]
+    #[cfg_attr(feature = "use-std", error("FFI bork"))]
+    // #[cfg(feature = "use-std")]
+    FFI(#[cfg_attr(feature = "use-std", from)] FFIError),
+    // #[cfg(not(feature = "use-std"))]
+    // FFI(FFIError),
+    #[cfg_attr(feature = "use-std", error("Malformed stack"))]
     Malformed,
-    #[error("Stack underflow")]
+    #[cfg_attr(feature = "use-std", error("Stack underflow"))]
     Underflow,
-    #[error("Stack overflow")]
+    #[cfg_attr(feature = "use-std", error("Stack overflow"))]
     Overflow,
+}
+
+#[cfg(not(feature = "use-std"))]
+impl From<FFIError> for VMError {
+    fn from(value: FFIError) -> Self {
+        VMError::FFI(value)
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
@@ -214,21 +223,21 @@ where
     }
 
     pub fn dump_state(&self) {
-        debug!("stack: {:?}", self.stack);
-        debug!("rstack: {:?}", self.return_stack);
-        debug!("globals: {:?}", self.globals);
-        debug!("locals: {:?}", self.locals);
+        trench_debug!("stack: {:?}", self.stack);
+        trench_debug!("rstack: {:?}", self.return_stack);
+        trench_debug!("globals: {:?}", self.globals);
+        trench_debug!("locals: {:?}", self.locals);
         let debug_funcs = true;
         if debug_funcs {
             for (name, def) in &self.funcs {
-                debug!("F {name} => {def:?}")
+                trench_debug!("F {} => {:?}", name, def)
             }
         }
     }
 
     fn binary_op(&mut self, op: BinOp) {
         // TODO error propagation ("Exhausted" should not be an error...)
-        // println!("\n\n\n\n---bop\n");
+        // trench_debug!("\n\n\n\n---bop\n");
         self.dump_state();
         self.run().ok();
         self.dump_state();
@@ -240,8 +249,8 @@ where
     }
 
     fn eval(&mut self, op: &Op<FFI>) -> Result<(), VMError> {
-        // println!("----");
-        // println!("eval {self:?}");
+        // trench_debug!("----");
+        // trench_debug!("eval {self:?}");
         match op {
             Op::ExitFn => {
                 self.exit_fn();
@@ -269,11 +278,9 @@ where
             Op::And => self.binary_op(|x, y| x & y),
             Op::Or => self.binary_op(|x, y| x | y),
 
-            Op::GetVar(name) => self.push(Cell::Val(
-                *self
-                    .get_var(name)
-                    .expect(&format!("variable {name} not found")),
-            )),
+            Op::GetVar(name) => {
+                self.push(Cell::Val(*self.get_var(name).expect("variable not found")))
+            }
             Op::SetVar(name) => {
                 // TODO error propagation
 
@@ -300,10 +307,10 @@ where
                         Param::DynPacked => {
                             let param_len =
                                 divrem::DivCeil::div_ceil(top.unwrap_raw() as usize, 4) + 1;
-                            dbg!(param_len);
+                            // trench_trace!("param_len {}", param_len);
                             let stack_len = self.stack.len();
 
-                            trace!("{stack_len} {param_len}");
+                            // trench_trace!("{stack_len} {param_len}");
                             let param_start = stack_len - param_len;
 
                             params.extend(self.stack[param_start..].iter().cloned());
@@ -351,7 +358,7 @@ where
         let func = self.funcs.get(&name.into()).cloned();
         match func {
             Some(func) => {
-                println!("calling {name}");
+                trench_debug!("calling {}", name);
                 self.locals.push(VarStorage::new());
 
                 self.return_addr = Some(self.stack.len());
@@ -371,7 +378,7 @@ where
                 if extra_verbose {
                     self.dump_state();
                 }
-                println!("</{name}>");
+                trench_debug!("</{}>", name);
                 self.locals.pop();
                 res
             }
@@ -420,11 +427,11 @@ where
             None => self.globals.get(name),
         };
         self.dump_state();
-        res.expect(&format!("variable {name} not found")).as_ref()
+        res.expect("variable  not found").as_ref()
     }
 
     pub fn push(&mut self, i: Cell<FFI>) {
-        // println!("push {i:?}");
+        trench_trace!("push {i:?}");
         if let Err(e) = self.stack.push(i) {
             err("stack too full");
         }
@@ -436,7 +443,7 @@ where
 
     pub fn pop_unchecked(&mut self) -> Cell<FFI> {
         let res = self.stack.pop();
-        // println!("pop! {res:?}");
+        // trench_debug!("pop! {res:?}");
         if res.is_none() {
             err("stack not full enough");
         }
@@ -444,7 +451,7 @@ where
     }
 
     pub fn push_return(&mut self, i: Cell<FFI>) {
-        // println!("rpush {i:?}");
+        // trench_debug!("rpush {i:?}");
         if let Err(_e) = self.return_stack.push(i) {
             err("return stack too full");
         }
@@ -473,15 +480,16 @@ where
     }
 
     pub fn run(&mut self) -> Result<(), VMError> {
-        // TODO meh, would rather not clone
-        // is there a better way to "run until we've exhausted all operations"?
+        // run until exhausted
+        // TODO very MEH architecture atm, a) cloned, b) the concept seems flawed
+        // c) at the very least VMError::Exhausted/Done should not be an `Err`
         while let Some(Cell::Op(op)) = self.stack.last().cloned() {
             self.stack.pop();
-            trace!("running {op:?}");
+            // trench_trace!("running {op:?}");
             self.dump_state();
             self.eval(&op);
 
-            trace!("{op:?} done\n------------------------");
+            // trench_trace!("{op:?} done\n------------------------");
         }
         Err(VMError::FixmeNotAnErrorExhausted)
     }

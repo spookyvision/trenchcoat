@@ -1,16 +1,15 @@
-// TODO WasmRuntime hsv console.log blah
-
 use super::traits::Peripherals;
-use crate::forth::{runtime::CoreRuntime, vm::CellData};
+use crate::{forth::vm::CellData, vanillajs::runtime::VanillaJSRuntime};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConsoleRuntime {
     time_ms: u32,
-    dt: u32,
+    dt: i32,
     led_idx: usize,
 }
 
 impl ConsoleRuntime {
-    pub fn new(dt: u32) -> Self {
+    pub fn new(dt: i32) -> Self {
         Self {
             time_ms: 0,
             dt,
@@ -27,17 +26,20 @@ impl Default for ConsoleRuntime {
 
 impl Peripherals for ConsoleRuntime {
     fn led_begin(&mut self) {
-        log::debug!("LED begin");
+        trench_debug!("LED begin");
     }
 
     fn led_commit(&mut self) {
-        log::debug!("LED commit");
-        log::debug!("inc time by {}ms", self.dt);
-        self.time_ms += self.dt;
+        trench_debug!("LED commit");
+        trench_debug!("step time by {}ms", self.dt);
+        self.time_ms = self.time_ms.wrapping_add_signed(self.dt);
     }
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
-        log::debug!("LED[{}] HSV({h},{s},{v})", self.led_idx);
+        let h: f32 = h.to_num();
+        let s: f32 = s.to_num();
+        let v: f32 = v.to_num();
+        trench_debug!("LED[{}] HSV({},{},{})", self.led_idx, h, s, v);
     }
 
     fn set_led_idx(&mut self, idx: usize) {
@@ -45,12 +47,12 @@ impl Peripherals for ConsoleRuntime {
     }
 }
 
-impl CoreRuntime for ConsoleRuntime {
+impl VanillaJSRuntime for ConsoleRuntime {
     fn time_millis(&mut self) -> u32 {
         self.time_ms
     }
 
     fn log(&mut self, s: &str) {
-        log::debug!("[LOG] {s}");
+        trench_debug!("[LOG] {}", s);
     }
 }

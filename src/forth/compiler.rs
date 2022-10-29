@@ -1,14 +1,11 @@
 use std::{collections::HashMap, marker::PhantomData};
 
+use log::trace;
 use swc_ecma_ast::*;
 use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
-use super::{
-    runtime::CoreRuntime,
-    vm::{DefaultStack, FFIOps},
-};
-use crate::forth::vm::{Cell, CellData, FuncDef, Op, VM};
+use super::vm::{Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
 
 pub struct Compiler<FFI, RT> {
     stack: DefaultStack<FFI>,
@@ -20,8 +17,7 @@ pub struct Compiler<FFI, RT> {
 
 impl<FFI, RT> Compiler<FFI, RT>
 where
-    RT: CoreRuntime,
-    FFI: FFIOps<RT> + Copy + core::cmp::Eq,
+    FFI: FFIOps<RT> + Clone + Eq,
 {
     pub fn new(ffi_defs: HashMap<String, FFI>) -> Self {
         Self {
@@ -77,7 +73,7 @@ where
                 let name = left.as_pat().expect("wat is this {left:?}");
                 let name = var_name(name);
                 let right = &ass.right;
-                println!("assign {name} = {:?}", right);
+                trace!("assign {name} = {:?}", right);
 
                 self.inside_assignment = true;
                 self.eval_expr(right);
@@ -98,7 +94,7 @@ where
                 }
 
                 let callee = &call_expr.callee;
-                dbg!(&callee);
+                trace!("{callee:?}");
                 match callee {
                     Callee::Super(_) => todo!(),
                     Callee::Import(_) => todo!(),
@@ -112,7 +108,10 @@ where
                                 let prop = prop.sym.as_ref();
                                 let func = format!("{obj}_{prop}");
                                 self.stack.push(Cell::Op(Op::FFI(
-                                    *self.ffi_defs.get(&func).expect("function not found!"),
+                                    self.ffi_defs
+                                        .get(&func)
+                                        .expect("function not found!")
+                                        .clone(),
                                 )));
                             }
                         }
@@ -124,11 +123,11 @@ where
 
                             match self.ffi_defs.get(func_name) {
                                 Some(ffi_func) => {
-                                    dbg!("add ffi call to", func_name);
-                                    self.stack.push(Cell::Op(Op::FFI(*ffi_func)));
+                                    trace!("add ffi call to {func_name:?}");
+                                    self.stack.push(Cell::Op(Op::FFI(ffi_func.clone())));
                                 }
                                 None => {
-                                    dbg!("add call to", func_name);
+                                    trace!("add call to {func_name:?}");
                                     self.stack.push(Cell::Op(Op::Call(func_name.into())));
                                 }
                             };
@@ -143,15 +142,15 @@ where
             }
             Expr::New(_) => todo!(),
             Expr::Seq(s) => {
-                dbg!("SEQ", s);
+                trace!("SEQ {s:?}");
             }
             Expr::Ident(id) => {
-                println!("ident! {:?}", id);
+                trace!("ident! {id:?}");
                 self.stack
                     .push(Cell::Op(Op::GetVar(id.sym.as_ref().into())));
             }
             Expr::Lit(lit) => {
-                println!("lit! {:?}", lit);
+                trace!("lit! {lit:?}");
                 match lit {
                     Lit::Str(s) => {
                         // TODO dedup <> `VM::push_str`
@@ -220,8 +219,8 @@ where
 
 impl<FFI, RT> Visit for Compiler<FFI, RT>
 where
-    RT: CoreRuntime,
-    FFI: FFIOps<RT> + Copy + Clone + core::cmp::Eq,
+    RT: Clone + Eq,
+    FFI: FFIOps<RT> + Clone + Eq,
 {
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         let name = n.ident.sym.as_ref();
@@ -286,7 +285,7 @@ where
         for decl in n.decls.iter() {
             let name = var_name(&decl.name);
 
-            println!("\ndecl {name} = ");
+            trace!("<decl {name} = ");
 
             if let Some(init) = decl.init.as_deref() {
                 self.inside_assignment = true;
@@ -296,7 +295,7 @@ where
             }
             self.stack.push(Op::DeclVar(name.into()).into());
 
-            println!("</decl {name}>");
+            trace!("</decl {name}>");
         }
     }
 }

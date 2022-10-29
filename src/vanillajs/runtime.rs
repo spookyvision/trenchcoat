@@ -3,35 +3,35 @@ use core::str::from_utf8;
 use fixed::traits::ToFixed;
 use serde::{Deserialize, Serialize};
 
-use super::{
+use crate::forth::{
     util::StackSlice,
     vm::{Cell, CellData, FFIError, FFIOps, Param, VMError},
 };
-pub trait CoreRuntime {
+pub trait VanillaJSRuntime {
     fn time_millis(&mut self) -> u32;
     fn log(&mut self, s: &str);
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub enum PureJSFFI {
+pub enum VanillaJSFFI {
     ConsoleLog,
     MathPow,
 }
 
-impl<RT> FFIOps<RT> for PureJSFFI
+impl<RT> FFIOps<RT> for VanillaJSFFI
 where
-    RT: CoreRuntime,
+    RT: VanillaJSRuntime,
 {
     fn dispatch(&self, rt: &mut RT, params: &[Cell<Self>]) -> Result<Cell<Self>, VMError> {
         match self {
-            PureJSFFI::ConsoleLog => {
+            VanillaJSFFI::ConsoleLog => {
                 let v: heapless::Vec<u8, 32> = StackSlice(params)
                     .try_into()
                     .map_err(|_| VMError::Malformed)?;
                 rt.log(from_utf8(&v).map_err(|_| VMError::Malformed)?);
                 Ok(Cell::Null)
             }
-            PureJSFFI::MathPow => {
+            VanillaJSFFI::MathPow => {
                 if params.len() != 2 {
                     return Err(FFIError::NumArgs.into());
                 }
@@ -45,8 +45,8 @@ where
 
     fn call_info(&self) -> &[Param] {
         match self {
-            PureJSFFI::ConsoleLog => &[Param::DynPacked],
-            PureJSFFI::MathPow => &[Param::Normal, Param::Normal],
+            VanillaJSFFI::ConsoleLog => &[Param::DynPacked],
+            VanillaJSFFI::MathPow => &[Param::Normal, Param::Normal],
         }
     }
 }
@@ -75,7 +75,7 @@ pub mod stud {
         }
     }
 
-    impl CoreRuntime for StdRuntime {
+    impl VanillaJSRuntime for StdRuntime {
         fn time_millis(&mut self) -> u32 {
             // don't run this on a Boeing 787
             self.start.elapsed().as_millis() as u32
@@ -104,7 +104,7 @@ pub mod stud {
         }
     }
 
-    impl CoreRuntime for TestRuntime {
+    impl VanillaJSRuntime for TestRuntime {
         fn time_millis(&mut self) -> u32 {
             self.start.elapsed().as_millis() as u32
         }

@@ -1,6 +1,5 @@
 use core::str::from_utf8;
 
-use phf::phf_map;
 use serde::{Deserialize, Serialize};
 
 use super::traits::PixelBlazeRuntime;
@@ -9,7 +8,8 @@ use crate::forth::{
     vm::{Cell, CellData, FFIOps, Param, VMError},
 };
 
-pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf_map! {
+#[cfg(feature = "compiler")]
+pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
     "console_log" => PixelBlazeFFI::ConsoleLog,
     "sin" => PixelBlazeFFI::Sin,
     "time" => PixelBlazeFFI::Time,
