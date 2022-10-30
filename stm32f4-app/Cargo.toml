@@ -25,7 +25,7 @@ cordic = "0.1.5"
 micromath = { version = "2.0.0", features = ["num-traits"] }
 usb-device = "0.2" 
 usbd-serial = "0.1"
-bbqueue = { version = "0.5.1" }
+bbqueue = { version = "0.5.1", features = ["defmt_0_3"] }
 heapless = "0.7.16"
 
 
@@ -70,11 +70,3 @@ incremental = false
 lto = 'fat'
 opt-level = "s" # <-
 overflow-checks = false # <-
-
-# uncomment this to switch from the crates.io version of defmt to its git version
-# check app-template's README for instructions
-# [patch.crates-io]
-# defmt = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# defmt-rtt = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# defmt-test = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# panic-probe = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
