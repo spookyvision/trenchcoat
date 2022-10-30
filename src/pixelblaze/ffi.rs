@@ -88,8 +88,12 @@ where
 }
 
 pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> CellData {
-    let now = CellData::from_num((runtime.time_millis() % 1000) * 65);
-    (now * interval) / 1000
+    let millis_frac = runtime.time_millis() % 1000;
+    let now = CellData::from_num(millis_frac * 32);
+    // TODO figure out why tf this is ~5000 and not 500
+    let res = (now / 4795) * interval;
+    // defmt::debug!("{}", res.to_num::<f32>());
+    res
 }
 
 pub(crate) fn abs(val: CellData) -> CellData {
