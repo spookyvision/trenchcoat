@@ -20,3 +20,5 @@ log = "0.4.6"
 # WebAssembly Debug
 wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.7"
+postcard = { version = "1.0.2", features = ["use-std"] }
+anyhow = "1.0.66"

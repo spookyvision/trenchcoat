@@ -1,5 +1,8 @@
 use super::traits::Peripherals;
-use crate::{forth::vm::CellData, vanillajs::runtime::VanillaJSRuntime};
+use crate::{
+    forth::{compiler::MockRuntime, vm::CellData},
+    vanillajs::runtime::VanillaJSRuntime,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConsoleRuntime {
@@ -54,5 +57,15 @@ impl VanillaJSRuntime for ConsoleRuntime {
 
     fn log(&mut self, s: &str) {
         trench_debug!("[LOG] {}", s);
+    }
+}
+
+impl Peripherals for MockRuntime {
+    fn set_led_idx(&mut self, idx: usize) {
+        unimplemented!()
+    }
+
+    fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
+        unimplemented!()
     }
 }

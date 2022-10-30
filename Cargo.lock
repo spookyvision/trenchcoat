@@ -1372,6 +1372,7 @@ name = "trenchcoat"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "clap",
  "cordic",
  "defmt",
  "divrem",

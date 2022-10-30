@@ -21,9 +21,9 @@ exclude = ["web-app", "stm32f4-app"]
 use-std = ["thiserror", "postcard/alloc"]
 log = ["dep:log"]
 defmt = ["dep:defmt"]
-tty = ["swc_common?/termcolor", "swc_common?/tty-emitter"]
+tty = ["swc_common?/termcolor", "swc_common?/tty-emitter", "dep:clap"]
 desktop = ["use-std", "compiler", "tty"]
-compiler = ["use-std", "dep:phf", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
+compiler = ["use-std", "dep:anyhow", "dep:phf", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
 default = ["use-std", "log"]
 
 [dependencies]
@@ -44,6 +44,9 @@ log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
 thiserror = { version = "1", optional = true }
 divrem = "1"
+
+clap = { version = "4.0.18", features = ["derive"], optional = true }
+anyhow = { version = "1", optional = true }
 
 [dev-dependencies]
 anyhow = "1"

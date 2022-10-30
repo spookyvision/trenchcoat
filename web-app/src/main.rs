@@ -4,22 +4,17 @@ use dioxus::prelude::*;
 use fermi::{use_atom_state, use_read, Atom, AtomState};
 use gloo::timers::future::TimeoutFuture;
 use runtime::WebRuntime;
-use swc_common::{
-    errors::{emitter::Destination, ColorConfig, EmitterWriter, Handler},
-    sync::Lrc,
-    FileName, SourceMap,
-};
-use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
-use swc_ecma_visit::Visit;
 use trenchcoat::{
-    forth::compiler::Compiler,
+    forth::{
+        compiler::{compile, Compiler, Flavor, MockRuntime},
+        vm::VM,
+    },
     pixelblaze::{
         executor::Executor,
         ffi::{PixelBlazeFFI, FFI_FUNCS},
         runtime::ConsoleRuntime,
         traits::PixelBlazeRuntime,
     },
-    prelude::*,
 };
 
 use crate::{render::LedWidget, runtime::Led};
@@ -54,73 +49,42 @@ fn main() {
     dioxus::web::launch(app);
 }
 
-fn trenchit(pixel_count: usize) -> Result<WebExecutor, ()> {
-    let source_map: Lrc<SourceMap> = Default::default();
-    let emitter = EmitterWriter::new(Box::new(WebConsole), Some(source_map.clone()), false, false);
-    let handler = Handler::with_emitter(true, false, Box::new(emitter));
-
+fn trenchit(pixel_count: usize) -> anyhow::Result<WebExecutor> {
     let js = include_str!("../../res/rainbow melt.js");
-    let fm = source_map.new_source_file(FileName::Custom("test.js".into()), js.into());
 
-    let lexer = Lexer::new(
-        // We want to parse ecmascript
-        Syntax::Es(Default::default()),
-        // EsVersion defaults to es5
-        Default::default(),
-        StringInput::from(&*fm),
-        None,
-    );
+    let mut ser = compile(js, Flavor::Pixelblaze)?;
+    let mut vm: VM<PixelBlazeFFI, WebRuntime> = postcard::from_bytes_cobs(&mut ser)?;
 
-    let mut parser = Parser::new_from(lexer);
+    let pixel_count = 20;
+    vm.runtime_mut().init(pixel_count);
+    let mut executor = Executor::new(vm, pixel_count);
 
-    for e in parser.take_errors() {
-        e.into_diagnostic(&handler).emit();
-    }
-
-    if let Ok(module) = parser.parse_module().map_err(|e| {
-        // Unrecoverable fatal error occurred
-        e.into_diagnostic(&handler).emit();
-    }) {
-        let mut v = Compiler::new(
-            FFI_FUNCS
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), *v))
-                .collect::<HashMap<_, _>>(),
-        );
-        v.visit_module(&module);
-
-        let vm = v.into_vm(WebRuntime::new(pixel_count));
-
-        let mut executor = Executor::new(vm, pixel_count);
-        executor.start();
-        return Ok(executor);
-    }
-    Err(())
+    executor.start();
+    return Ok(executor);
+    // Err(())
 }
 
 #[allow(non_snake_case)]
 #[inline_props]
 fn Pb(cx: Scope) -> Element {
     let executor_state = use_atom_state(&cx, EXECUTOR);
-    let mut content = rsx!("no executor?");
+    let mut content = rsx!("something's missing");
 
     if let Some(executor) = executor_state.get() {
-        let inner = executor
-            .runtime()
-            .leds()
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(led_id, led)| {
-                rsx! {
-                    div {
-                        class: "square-container",
-                        key: "led-{led_id}",
-                        LedWidget { led: led }
+        if let Some(runtime) = executor.runtime() {
+            if let Some(leds) = runtime.leds() {
+                let inner = leds.iter().cloned().enumerate().map(|(led_id, led)| {
+                    rsx! {
+                        div {
+                            class: "square-container",
+                            key: "led-{led_id}",
+                            LedWidget { led: led }
+                        }
                     }
-                }
-            });
-        content = rsx!(div { inner });
+                });
+                content = rsx!(div { inner });
+            }
+        }
     }
 
     cx.render(content)

@@ -16,34 +16,31 @@ impl Led {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct WebRuntime {
     led_idx: usize,
-    leds: Vec<Led>,
+    leds: Option<Vec<Led>>,
     started_at: DateTime<Utc>,
 }
 
 impl WebRuntime {
-    pub fn new(pixel_count: usize) -> Self {
+    pub fn init(&mut self, pixel_count: usize) {
         let mut leds = Vec::with_capacity(pixel_count);
         for _ in 0..pixel_count {
             leds.push(Led::default())
         }
-        Self {
-            led_idx: 0,
-            leds,
-            started_at: Utc::now(),
-        }
+        self.leds = Some(leds);
     }
-
-    pub fn leds(&self) -> &[Led] {
-        &self.leds
+    pub fn leds(&self) -> Option<&Vec<Led>> {
+        self.leds.as_ref()
     }
 }
 
 impl Peripherals for WebRuntime {
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
-        self.leds[self.led_idx] = Led::new(h.to_num(), s.to_num(), v.to_num());
+        if let Some(leds) = self.leds.as_mut() {
+            leds[self.led_idx] = Led::new(h.to_num(), s.to_num(), v.to_num());
+        }
     }
 
     fn set_led_idx(&mut self, idx: usize) {

@@ -1,11 +1,142 @@
+use core::str::from_utf8;
 use std::{collections::HashMap, marker::PhantomData};
 
+use anyhow::{anyhow, Context};
 use log::trace;
+use swc_common::{
+    errors::{emitter::Destination, ColorConfig, EmitterWriter, Handler},
+    sync::Lrc,
+    FileName, SourceMap,
+};
 use swc_ecma_ast::*;
+use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
 use super::vm::{Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
+use crate::{
+    pixelblaze::{self, runtime::ConsoleRuntime, traits::PixelBlazeRuntime},
+    vanillajs::runtime::VanillaJSRuntime,
+};
+
+#[cfg_attr(feature = "tty", derive(clap::ValueEnum))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Flavor {
+    VanillaJS,
+    Pixelblaze,
+}
+
+// TODO medium sized wart
+#[derive(Clone, PartialEq, Default)]
+pub struct MockRuntime;
+
+#[cfg(feature = "tty")]
+pub type Source = Box<std::path::Path>;
+
+#[cfg(not(feature = "tty"))]
+pub type Source = str;
+
+pub fn compile(source: &Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
+    let source_map: Lrc<SourceMap> = Default::default();
+    let source_file;
+    #[cfg(feature = "tty")]
+    {
+        source_file = source_map
+            .load_file(source)
+            .with_context(|| format!("Failed to load {source:?}"))?;
+    }
+    #[cfg(not(feature = "tty"))]
+    {
+        source_file = source_map.new_source_file(
+            FileName::Custom("__trenchcc_generated.js".into()),
+            source.into(),
+        );
+    }
+
+    let lexer = Lexer::new(
+        // We want to parse ecmascript
+        Syntax::Es(Default::default()),
+        // EsVersion defaults to es5
+        Default::default(),
+        StringInput::from(&*source_file),
+        None,
+    );
+
+    let mut parser = Parser::new_from(lexer);
+
+    let handler = new_handler(source_map.clone());
+    for e in parser.take_errors() {
+        e.into_diagnostic(&handler).emit();
+    }
+
+    if let Ok(module) = parser.parse_module().map_err(|e| {
+        e.clone().into_diagnostic(&handler).emit();
+    }) {
+        let ser = match flavor {
+            Flavor::VanillaJS => todo!(),
+            Flavor::Pixelblaze => emit(
+                module,
+                pixelblaze::ffi::FFI_FUNCS,
+                ConsoleRuntime::default(),
+            ),
+        }
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+
+        return Ok(ser);
+    }
+
+    anyhow::bail!("Compilation failed")
+}
+
+#[derive(Clone, Copy)]
+struct LogEmitter;
+
+impl std::io::Write for LogEmitter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(s) = from_utf8(buf) {
+            log::warn!("{s}");
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+fn new_handler(source_map: Lrc<SourceMap>) -> Handler {
+    #[cfg(feature = "tty")]
+    {
+        Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(source_map))
+    }
+    #[cfg(not(feature = "tty"))]
+    {
+        let emitter =
+            EmitterWriter::new(Box::new(LogEmitter), Some(source_map.clone()), false, false);
+        Handler::with_emitter(true, false, Box::new(emitter))
+    }
+}
+
+fn emit<FFI, RT>(
+    module: Module,
+    ffi_defs: phf::Map<&str, FFI>,
+    runtime: RT,
+) -> Result<Vec<u8>, postcard::Error>
+where
+    FFI: FFIOps<RT> + Copy + Eq + serde::Serialize,
+    RT: Clone + PartialEq,
+{
+    let mut v = Compiler::new(
+        ffi_defs
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect::<HashMap<_, _>>(),
+    );
+    v.visit_module(&module);
+
+    let vm = v.into_vm(runtime);
+    println!("vm size is {}", std::mem::size_of_val(&vm));
+    postcard::to_allocvec_cobs(&vm)
+}
 
 pub struct Compiler<FFI, RT> {
     stack: DefaultStack<FFI>,

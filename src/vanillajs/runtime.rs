@@ -4,6 +4,7 @@ use fixed::traits::ToFixed;
 use serde::{Deserialize, Serialize};
 
 use crate::forth::{
+    compiler::MockRuntime,
     util::StackSlice,
     vm::{Cell, CellData, FFIError, FFIOps, Param, VMError},
 };
@@ -117,3 +118,13 @@ pub mod stud {
 
 #[cfg(any(test, feature = "use-std"))]
 pub use stud::StdRuntime;
+
+impl VanillaJSRuntime for MockRuntime {
+    fn time_millis(&mut self) -> u32 {
+        unimplemented!()
+    }
+
+    fn log(&mut self, s: &str) {
+        unimplemented!()
+    }
+}
