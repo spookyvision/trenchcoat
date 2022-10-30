@@ -16,7 +16,7 @@ pub type VarStorage = Map<VarString, Option<CellData>, 32>;
 
 pub type Stack<FFI, const N: usize> = heapless::Vec<Cell<FFI>, N>;
 pub type DefaultStack<FFI> = Stack<FFI, 64>;
-pub type DefaultFuncDef<FFI> = Map<VarString, FuncDef<FFI>, 8>;
+pub type DefaultFuncDef<FFI> = Map<VarString, FuncDef<FFI>, 4>;
 impl<FFI> TryFrom<&Cell<FFI>> for CellData {
     type Error = VMError;
 

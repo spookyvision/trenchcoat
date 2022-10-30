@@ -12,7 +12,7 @@ A questionable combination of JavaScript (in syntax), FORTH (in spirit) and Micr
 Care has been taken to keep runtime platform, language and language dialect generic. This means:
 - runtime: you can run `trenchcoat` on a PC, a microcontroller, or in the browser.
 - language dialect: Pixelblaze-specific JavaScript extensions are factored out and don't pollute the standard JS namespace
-- language: the virtual machine actually executing code is a language-agnostic stack machine, there just happened to be a [JavaScript parser](https://rustdoc.swc.rs/swc_ecma_parser/) lying around. If you want to add, say, Python syntax support, you totally can! I won't!
+- language: the virtual machine actually executing code is a language-agnostic stack machine, there just happened to be a [JavaScript parser](https://rustdoc.swc.rs/swc_ecma_parser/) lying around. If you want to add, say, Python syntax support, you totally can! I won't! (Pull requests are welcome, though)
 
 ## Limitations
 - Only a very minimal subset of JavaScript and Pixelblaze functionality is supported. You want `for` loops? Maybe in the next release…
