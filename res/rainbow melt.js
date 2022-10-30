@@ -10,5 +10,5 @@ export function render(index) {
   c3 = wave(c2 + t1)
   v = wave(c3 + t1)
   v = v * v
-  hsv(c1 + t2, 1, v * 0.13)
+  hsv(c1 + t2, 1, v)
 }
