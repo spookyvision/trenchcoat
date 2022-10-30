@@ -35,6 +35,10 @@ impl F4Runtime {
         self.time = self.time.wrapping_add_signed(dt);
     }
 
+    pub fn set_now_ms(&mut self, now: u32) {
+        self.time = now;
+    }
+
     pub fn set_ws(&mut self, ws: Option<WS>) {
         self.ws = ws;
     }
@@ -51,7 +55,8 @@ impl Peripherals for F4Runtime {
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         // defmt::debug!("LED[{}] HSV({},{},{})", self.led_idx, h, s, v);
-        self.leds[self.led_idx] = gamma(hsv2rgb(h, s, v));
+        // self.leds[self.led_idx] = gamma(hsv2rgb(h, s, v));
+        self.leds[self.led_idx] = hsv2rgb(h, s, v);
     }
 
     fn led_begin(&mut self) {}
