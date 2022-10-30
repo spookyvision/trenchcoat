@@ -305,8 +305,7 @@ where
                             params.push(pop.ok_or(VMError::FixmeNotAnErrorExhausted)?);
                         }
                         Param::DynPacked => {
-                            let param_len =
-                                divrem::DivCeil::div_ceil(top.unwrap_raw() as usize, 4) + 1;
+                            let param_len = (top.unwrap_raw() as usize).div_ceil(4) + 1;
                             // trench_trace!("param_len {}", param_len);
                             let stack_len = self.stack.len();
 
