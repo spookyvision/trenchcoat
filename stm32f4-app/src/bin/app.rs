@@ -12,7 +12,7 @@ mod app {
 
     use defmt::{error, info};
     use dwt_systick_monotonic::DwtSystick;
-    use fugit::RateExtU32;
+    use fugit::{Instant, RateExtU32};
     use postcard::accumulator::{CobsAccumulator, FeedResult};
     use stm32f4_app::runtime::F4Runtime;
     use stm32f4xx_hal::{otg_fs as usb, pac, prelude::*};
@@ -132,14 +132,15 @@ mod app {
 
     #[task(shared=[executor])]
     fn frame(mut cx: frame::Context) {
-        let frame_interval_ms = 25u32;
+        let frame_interval_ms = 30u32;
+
         cx.shared.executor.lock(|executor| {
-            executor.do_frame();
             if let Some(runtime) = executor.runtime_mut() {
-                // TODO /10 is a hack to make things look nicer,
-                // something in our calcs is probably bork
-                runtime.step_ms((frame_interval_ms / 10) as i32);
+                // let now: Instant<u32, 1, SYSCLK> = monotonics::now();
+                // let now_ms = now.ticks() / (SYSCLK / 1000);
+                runtime.step_ms(frame_interval_ms as i32);
             }
+            executor.do_frame();
         });
         frame::spawn_after(frame_interval_ms.millis()).unwrap();
     }
