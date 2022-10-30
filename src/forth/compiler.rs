@@ -4,9 +4,9 @@ use std::{collections::HashMap, marker::PhantomData};
 use anyhow::{anyhow, Context};
 use log::trace;
 use swc_common::{
-    errors::{emitter::Destination, ColorConfig, EmitterWriter, Handler},
+    errors::{ColorConfig, Handler},
     sync::Lrc,
-    FileName, SourceMap,
+    SourceMap,
 };
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
@@ -14,10 +14,7 @@ use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
 use super::vm::{Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
-use crate::{
-    pixelblaze::{self, runtime::ConsoleRuntime, traits::PixelBlazeRuntime},
-    vanillajs::runtime::VanillaJSRuntime,
-};
+use crate::pixelblaze::{self, runtime::ConsoleRuntime};
 
 #[cfg_attr(feature = "tty", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy, PartialEq)]
