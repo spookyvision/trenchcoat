@@ -20,9 +20,14 @@ trenchcoat = { path = "..", features = ["defmt"], default-features = false}
 f4-peri = { git = "https://github.com/spookyvision/f4-peri.git" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
-postcard = "1.0.2"
+postcard = { version = "1.0.2", features = ["use-defmt"] }
 cordic = "0.1.5"
 micromath = { version = "2.0.0", features = ["num-traits"] }
+usb-device = "0.2" 
+usbd-serial = "0.1"
+bbqueue = { version = "0.5.1" }
+heapless = "0.7.16"
+
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal.git"
