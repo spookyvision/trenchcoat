@@ -3,6 +3,9 @@
 #[macro_use]
 mod macros;
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 pub mod forth;
 pub mod pixelblaze;
 pub mod vanillajs;

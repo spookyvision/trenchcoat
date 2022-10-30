@@ -1,10 +1,40 @@
-use core::fmt::Debug;
+use core::{fmt::Debug, marker::PhantomData};
 
 use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
-use serde::{Deserialize, Serialize};
+#[cfg(not(feature = "alloc"))]
+use heapless::Entry;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-pub type VarString = heapless::String<16>;
-pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
+#[cfg(not(feature = "alloc"))]
+pub(crate) mod types {
+
+    pub type VarString = heapless::String<16>;
+    pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
+
+    pub type Stack<FFI, const N: usize> = heapless::Vec<Cell<FFI>, N>;
+
+    pub type VMVec<T, const N: usize> = heapless::Vec<T, N>;
+}
+
+#[cfg(feature = "alloc")]
+use std::collections::hash_map::Entry;
+#[cfg(feature = "alloc")]
+pub(crate) mod types {
+
+    use super::Cell;
+
+    pub type VarString = String;
+    pub type Map<K, V, const N: usize> = std::collections::HashMap<K, V>;
+
+    pub type Stack<FFI, const N: usize> = alloc::vec::Vec<Cell<FFI>>;
+    pub type VMVec<T, const N: usize> = alloc::vec::Vec<T>;
+}
+
+use types::*;
+pub use types::*;
+
+pub type DefaultStack<FFI> = Stack<FFI, 64>;
+
 // TODO pixelblaze uses <16,16> but that's not the best general range
 // -> definitely feature gate this to at least have <24,8>
 // -> bite the `f32` bullet?
@@ -14,8 +44,6 @@ pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
 pub type CellData = FixedI32<U16>;
 pub type VarStorage = Map<VarString, Option<CellData>, 32>;
 
-pub type Stack<FFI, const N: usize> = heapless::Vec<Cell<FFI>, N>;
-pub type DefaultStack<FFI> = Stack<FFI, 64>;
 pub type DefaultFuncDef<FFI> = Map<VarString, FuncDef<FFI>, 4>;
 impl<FFI> TryFrom<&Cell<FFI>> for CellData {
     type Error = VMError;
@@ -148,19 +176,21 @@ impl<FFI> Cell<FFI> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct FuncDef<FFI> {
-    params: heapless::Vec<VarString, 4>,
+    params: VMVec<VarString, 4>,
     stack: DefaultStack<FFI>,
+    _phantom: PhantomData<FFI>,
 }
 
 impl<FFI> FuncDef<FFI> {
     pub fn new<P: AsRef<str>>(params: &[P], stack: Stack<FFI, 64>) -> Self {
-        let mut our_params = heapless::Vec::new();
+        let mut our_params = VMVec::new();
         for param in params {
             our_params.push(param.as_ref().into());
         }
         Self {
             stack,
             params: our_params,
+            _phantom: PhantomData,
         }
     }
 
@@ -183,7 +213,7 @@ where
     return_stack: Stack<FFI, 4>,
     return_addr: Option<usize>,
     globals: VarStorage,
-    locals: heapless::Vec<VarStorage, 8>,
+    locals: VMVec<VarStorage, 8>,
     funcs: DefaultFuncDef<FFI>,
     #[serde(skip)]
     runtime: RT,
@@ -196,11 +226,11 @@ where
 {
     pub fn new_empty(runtime: RT) -> Self {
         Self {
-            stack: heapless::Vec::new(),
-            return_stack: heapless::Vec::new(),
+            stack: Default::default(),
+            return_stack: Default::default(),
             return_addr: None,
             globals: Map::new(),
-            locals: heapless::Vec::new(),
+            locals: Default::default(),
             funcs: DefaultFuncDef::new(),
             runtime,
         }
@@ -209,10 +239,10 @@ where
     pub fn new(stack: DefaultStack<FFI>, funcs: DefaultFuncDef<FFI>, runtime: RT) -> Self {
         Self {
             stack,
-            return_stack: heapless::Vec::new(),
+            return_stack: Default::default(),
             return_addr: None,
             globals: Map::new(),
-            locals: heapless::Vec::new(),
+            locals: Default::default(),
             funcs,
             runtime,
         }
@@ -264,8 +294,10 @@ where
             // TODO: test
             Op::Nruter => {
                 let cell = self.return_stack.pop().ok_or(VMError::Underflow)?;
-                // TODO make self.pop() return Result<>
-                self.stack.push(cell).map_err(|_| VMError::Overflow)?;
+                if self.stack.capacity() == 0 {
+                    return Err(VMError::Overflow);
+                }
+                self.stack.push(cell);
             }
             Op::Call(name) => {
                 self.call_fn(name);
@@ -346,15 +378,21 @@ where
         let mut fn_stack = Stack::new();
         fn_stack.extend(stack.iter().cloned());
         let name = name.as_ref();
+
+        #[cfg(not(feature = "alloc"))]
+        {
+            if self.funcs.capacity() == 0 {
+                panic!("out of function storage");
+            }
+        }
         self.funcs
-            .insert(name.into(), FuncDef::new(params, fn_stack))
-            .expect("oh no");
+            .insert(name.into(), FuncDef::new(params, fn_stack));
     }
 
     pub fn call_fn(&mut self, name: impl AsRef<str>) -> Result<(), VMError> {
-        let name = name.as_ref();
+        let name: VarString = name.as_ref().into();
         // drempels
-        let func = self.funcs.get(&name.into()).cloned();
+        let func = self.funcs.get(&name).cloned();
         match func {
             Some(func) => {
                 trench_debug!("calling {}", name);
@@ -389,16 +427,20 @@ where
         let name = name.as_ref().into();
 
         let storage = self.locals.last_mut().unwrap_or(&mut self.globals);
-        storage
-            .insert(name, None)
-            .expect("variable space exhausted");
+        #[cfg(not(feature = "alloc"))]
+        {
+            if storage.capacity() == 0 {
+                panic!("variable space exhausted");
+            }
+        }
+        storage.insert(name, None);
     }
 
     // JS semantics: assignment is always valid, if there's no local, it's a global
     fn var_assign_slot(&mut self, name: impl AsRef<str>) -> &mut Option<CellData> {
         let name = name.as_ref();
 
-        if let Some(heapless::Entry::Occupied(local_entry)) = self
+        if let Some(Entry::Occupied(local_entry)) = self
             .locals
             .last_mut()
             .map(|locals| locals.entry(name.into()))
@@ -406,11 +448,18 @@ where
             return local_entry.into_mut();
         }
 
+        let capacity = self.globals.capacity();
         match self.globals.entry(name.into()) {
-            heapless::Entry::Occupied(entry) => entry.into_mut(),
-            heapless::Entry::Vacant(missing) => missing
-                .insert(None)
-                .expect("global variable space exhausted"),
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(missing) => {
+                #[cfg(not(feature = "alloc"))]
+                {
+                    if capacity == 0 {
+                        panic!("global variable space exhausted");
+                    }
+                }
+                missing.insert(None)
+            }
         }
     }
 
@@ -419,7 +468,7 @@ where
     }
 
     pub fn get_var(&self, name: impl AsRef<str>) -> Option<&CellData> {
-        let name = &name.as_ref().into();
+        let name: &VarString = &name.as_ref().into();
 
         let res = match self.locals.last() {
             Some(locals) => locals.get(name).or(self.globals.get(name)),
@@ -431,9 +480,13 @@ where
 
     pub fn push(&mut self, i: Cell<FFI>) {
         trench_trace!("push {i:?}");
-        if let Err(e) = self.stack.push(i) {
-            err("stack too full");
+        #[cfg(not(feature = "alloc"))]
+        {
+            if self.stack.capacity() == 0 {
+                err("stack overflow");
+            }
         }
+        self.stack.push(i);
     }
 
     pub fn pop(&mut self) -> Option<Cell<FFI>> {
@@ -442,7 +495,7 @@ where
 
     pub fn pop_unchecked(&mut self) -> Cell<FFI> {
         let res = self.stack.pop();
-        // trench_debug!("pop! {res:?}");
+        // trench_trace!("pop! {res:?}");
         if res.is_none() {
             err("stack not full enough");
         }
@@ -450,16 +503,21 @@ where
     }
 
     pub fn push_return(&mut self, i: Cell<FFI>) {
-        // trench_debug!("rpush {i:?}");
-        if let Err(_e) = self.return_stack.push(i) {
-            err("return stack too full");
+        // trench_trace!("rpush {i:?}");
+        #[cfg(not(feature = "alloc"))]
+        {
+            if self.return_stack.capacity() == 0 {
+                err("return stack overflow");
+            }
         }
+
+        self.return_stack.push(i);
     }
 
     fn pop_return(&mut self) -> Cell<FFI> {
         let res = self.return_stack.pop();
         if res.is_none() {
-            err("return stack not full enough");
+            err("return stack underflow");
         }
         res.unwrap()
     }
@@ -471,7 +529,14 @@ where
 
     pub fn do_return(&mut self) {
         let top = self.pop_unchecked();
-        self.return_stack.push(top).expect("return stack too full");
+
+        #[cfg(not(feature = "alloc"))]
+        {
+            if self.return_stack.capacity() == 0 {
+                err("return stack too full");
+            }
+        }
+        self.return_stack.push(top);
     }
 
     pub fn top(&self) -> Option<&Cell<FFI>> {

@@ -13,8 +13,11 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
-use super::vm::{Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
-use crate::pixelblaze::{self, runtime::ConsoleRuntime};
+use super::vm::{types::VMVec, Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
+use crate::{
+    pixelblaze::{self, runtime::ConsoleRuntime},
+    vanillajs,
+};
 
 #[cfg_attr(feature = "tty", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,7 +48,7 @@ pub fn compile(source: &Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
     #[cfg(not(feature = "tty"))]
     {
         source_file = source_map.new_source_file(
-            FileName::Custom("__trenchcc_generated.js".into()),
+            swc_common::FileName::Custom("__trenchcc_generated.js".into()),
             source.into(),
         );
     }
@@ -103,8 +106,12 @@ fn new_handler(source_map: Lrc<SourceMap>) -> Handler {
     }
     #[cfg(not(feature = "tty"))]
     {
-        let emitter =
-            EmitterWriter::new(Box::new(LogEmitter), Some(source_map.clone()), false, false);
+        let emitter = swc_common::errors::EmitterWriter::new(
+            Box::new(LogEmitter),
+            Some(source_map.clone()),
+            false,
+            false,
+        );
         Handler::with_emitter(true, false, Box::new(emitter))
     }
 }
@@ -145,7 +152,7 @@ where
 {
     pub fn new(ffi_defs: HashMap<String, FFI>) -> Self {
         Self {
-            stack: heapless::Vec::new(),
+            stack: VMVec::new(),
             func_defs: HashMap::new(),
             ffi_defs,
             inside_assignment: false,
