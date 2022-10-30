@@ -1,4 +1,5 @@
 use f4_peri::ws2812::WS;
+use micromath::F32Ext;
 use smart_leds::{SmartLedsWrite, RGB8};
 use trenchcoat::{
     forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
@@ -50,7 +51,7 @@ impl Peripherals for F4Runtime {
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         // defmt::debug!("LED[{}] HSV({},{},{})", self.led_idx, h, s, v);
-        self.leds[self.led_idx] = hsv2rgb(h, s, v);
+        self.leds[self.led_idx] = gamma(hsv2rgb(h, s, v));
     }
 
     fn led_begin(&mut self) {}
@@ -70,6 +71,19 @@ impl VanillaJSRuntime for F4Runtime {
     fn log(&mut self, s: &str) {
         defmt::debug!("{}", s);
     }
+}
+
+fn gamma_component(comp: u8) -> u8 {
+    let exponent = 2.2;
+    (((comp as f32) / 255.0).powf(exponent) * 255.0) as u8
+}
+
+pub fn gamma(rgb: RGB8) -> RGB8 {
+    RGB8::new(
+        gamma_component(rgb.r),
+        gamma_component(rgb.g),
+        gamma_component(rgb.b),
+    )
 }
 
 pub fn hsv2rgb(h: CellData, s: CellData, v: CellData) -> RGB8 {

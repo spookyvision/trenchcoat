@@ -21,6 +21,8 @@ f4-peri = { git = "https://github.com/spookyvision/f4-peri.git" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
 postcard = "1.0.2"
+cordic = "0.1.5"
+micromath = { version = "2.0.0", features = ["num-traits"] }
 
 [dependencies.stm32f4xx-hal]
 git = "https://github.com/stm32-rs/stm32f4xx-hal.git"
