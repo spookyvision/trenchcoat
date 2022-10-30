@@ -1,12 +1,17 @@
 use core::{fmt::Debug, marker::PhantomData};
 
-use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
+use fixed::{
+    traits::ToFixed,
+    types::extra::{U16, U8},
+    FixedI32,
+};
 #[cfg(not(feature = "alloc"))]
 use heapless::Entry;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[cfg(not(feature = "alloc"))]
 pub(crate) mod types {
+    use super::Cell;
 
     pub type VarString = heapless::String<16>;
     pub type Map<K, V, const N: usize> = heapless::FnvIndexMap<K, V, N>;
@@ -30,7 +35,6 @@ pub(crate) mod types {
     pub type VMVec<T, const N: usize> = alloc::vec::Vec<T>;
 }
 
-use types::*;
 pub use types::*;
 
 pub type DefaultStack<FFI> = Stack<FFI, 64>;
@@ -454,11 +458,14 @@ where
             Entry::Vacant(missing) => {
                 #[cfg(not(feature = "alloc"))]
                 {
-                    if capacity == 0 {
-                        panic!("global variable space exhausted");
-                    }
+                    missing
+                        .insert(None)
+                        .expect("global variable space exhausted")
                 }
-                missing.insert(None)
+                #[cfg(feature = "alloc")]
+                {
+                    missing.insert(None)
+                }
             }
         }
     }
