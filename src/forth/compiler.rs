@@ -70,12 +70,8 @@ pub fn compile(source: &Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
         e.clone().into_diagnostic(&handler).emit();
     }) {
         let ser = match flavor {
-            Flavor::VanillaJS => todo!(),
-            Flavor::Pixelblaze => emit(
-                module,
-                pixelblaze::ffi::FFI_FUNCS,
-                ConsoleRuntime::default(),
-            ),
+            Flavor::VanillaJS => emit(module, vanillajs::ffi::FFI_FUNCS, MockRuntime::default()),
+            Flavor::Pixelblaze => emit(module, pixelblaze::ffi::FFI_FUNCS, MockRuntime::default()),
         }
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 

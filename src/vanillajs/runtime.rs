@@ -12,7 +12,7 @@ pub trait VanillaJSRuntime {
     fn log(&mut self, s: &str);
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum VanillaJSFFI {
     ConsoleLog,
     MathPow,

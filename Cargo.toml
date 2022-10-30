@@ -39,7 +39,7 @@ swc_ecma_utils = { version = "0.105", optional = true}
 swc_ecma_visit = { version = "0.80", features = ["debug"], optional = true }
 
 phf = { version = "0.11", features = ["macros"], optional = true }
-fixed = { version = "1", features = ["serde","num-traits"] }
+fixed = { version = "1", features = ["serde", "num-traits"] }
 cordic = "0.1"
 log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
