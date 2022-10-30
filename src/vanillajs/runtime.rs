@@ -119,7 +119,7 @@ pub mod stud {
 pub use stud::StdRuntime;
 
 #[cfg(feature = "compiler")]
-impl VanillaJSRuntime for super::compiler::MockRuntime {
+impl VanillaJSRuntime for crate::forth::compiler::MockRuntime {
     fn time_millis(&mut self) -> u32 {
         unimplemented!()
     }
