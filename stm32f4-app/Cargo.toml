@@ -26,7 +26,7 @@ micromath = { version = "2.0.0", features = ["num-traits"] }
 usb-device = "0.2" 
 usbd-serial = "0.1"
 bbqueue = { version = "0.5.1", features = ["defmt_0_3"] }
-heapless = "0.7.16"
+heapless = { version = "0.7.16", features = ["defmt", "defmt-impl"] }
 
 
 [dependencies.stm32f4xx-hal]

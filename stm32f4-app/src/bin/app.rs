@@ -10,11 +10,10 @@ use stm32f4_app as _; // global logger + panicking-behavior + memory layout
 mod app {
     use core::mem::size_of_val;
 
-    use bbqueue::{BBBuffer, Consumer, Producer};
     use defmt::{error, info};
     use dwt_systick_monotonic::DwtSystick;
     use fugit::RateExtU32;
-    use heapless::Vec;
+    use postcard::accumulator::{CobsAccumulator, FeedResult};
     use stm32f4_app::runtime::F4Runtime;
     use stm32f4xx_hal::{otg_fs as usb, pac, prelude::*};
     use trenchcoat::{
@@ -26,7 +25,7 @@ mod app {
     use usbd_serial::SerialPort;
 
     const SYSCLK: u32 = 84_000_000;
-    const USB_EP_SIZE: usize = 512;
+    const USB_EP_SIZE: usize = 256;
     const BYTECODE_SIZE: usize = 256;
 
     #[monotonic(binds = SysTick, default = true)]
@@ -35,20 +34,18 @@ mod app {
     #[shared]
     struct Shared {
         executor: Executor<PixelBlazeFFI, F4Runtime>,
-        bytecode: Vec<u8, BYTECODE_SIZE>,
     }
 
     #[local]
     struct Local {
         serial: SerialPort<'static, UsbBus<USB>>,
         usb_dev: UsbDevice<'static, UsbBusType>,
-        tx: Producer<'static, BYTECODE_SIZE>,
-        rx: Consumer<'static, BYTECODE_SIZE>,
+        bytecode: &'static mut CobsAccumulator<BYTECODE_SIZE>,
     }
 
     #[init(local = [
         ep: [u32; USB_EP_SIZE] = [0; USB_EP_SIZE],
-        bb: BBBuffer<BYTECODE_SIZE> = BBBuffer::new(),
+        ibytecode: CobsAccumulator<BYTECODE_SIZE> = CobsAccumulator::new(),
         iusb_bus: Option<UsbBusAllocator<UsbBusType>> = None
         ])]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -107,19 +104,13 @@ mod app {
 
         defmt::debug!("executor size is {}", size_of_val(&executor));
 
-        let (tx, rx) = cx.local.bb.try_split().unwrap();
-
         let mono = DwtSystick::new(&mut dcb, dwt, systick, clocks.sysclk().to_Hz());
         (
-            Shared {
-                executor,
-                bytecode: Vec::new(),
-            },
+            Shared { executor },
             Local {
                 usb_dev,
                 serial,
-                tx,
-                rx,
+                bytecode: cx.local.ibytecode,
             },
             init::Monotonics(mono),
         )
@@ -132,40 +123,11 @@ mod app {
         cx.shared.executor.lock(|executor| {
             executor.start();
             frame::spawn().ok();
-            swap::spawn_after(3000.millis()).unwrap();
         });
 
         loop {
             continue;
         }
-    }
-
-    #[task(shared=[executor])]
-    fn swap(mut cx: swap::Context) {
-        // info!("swob");
-        // let ser = include_bytes!("../../../res/rainbow melt low.tcb");
-
-        // let bytecode = cx.local.bytecode;
-        // bytecode[0..ser.len()].copy_from_slice(ser);
-        // let mut next_vm: VM<PixelBlazeFFI, F4Runtime> =
-        //     postcard::from_bytes_cobs(bytecode).unwrap();
-        // cx.shared.executor.lock(|executor| {
-        //     if let Some(vm) = executor.take_vm() {
-        //         let rt = vm.dismember();
-        //         *next_vm.runtime_mut() = rt;
-
-        //         swap2::spawn(next_vm).ok();
-        //     }
-        // });
-    }
-
-    #[task(shared=[executor])]
-    fn swap2(mut cx: swap2::Context, next_vm: VM<PixelBlazeFFI, F4Runtime>) {
-        info!("swobbbbb");
-        cx.shared.executor.lock(|executor| {
-            executor.set_vm(next_vm);
-            executor.start();
-        });
     }
 
     #[task(shared=[executor])]
@@ -182,51 +144,37 @@ mod app {
         frame::spawn_after(frame_interval_ms.millis()).unwrap();
     }
 
-    #[task(shared=[executor, bytecode], local=[])]
-    fn decode(cx: decode::Context) {
-        let shared = cx.shared;
-        (shared.bytecode, shared.executor).lock(|bytecode, executor| {
-            let mut wipe = false;
-            match postcard::from_bytes_cobs::<VM<PixelBlazeFFI, F4Runtime>>(bytecode) {
-                Ok(mut next_vm) => {
-                    wipe = true;
-                    info!("got vm!");
-                    if let Some(vm) = executor.take_vm() {
-                        let rt = vm.dismember();
-                        *next_vm.runtime_mut() = rt;
-                        executor.set_vm(next_vm);
-                        executor.start();
-                    }
-                }
-                Err(e) => error!("{}", e),
-            };
-            if wipe {
-                bytecode.truncate(0);
-            }
-        });
-    }
-
-    #[task(binds = OTG_FS, local = [usb_dev, serial, tx], shared=[bytecode])]
+    #[task(binds = OTG_FS, local = [usb_dev, serial, bytecode], shared=[executor])]
     fn usb_rx(mut cx: usb_rx::Context) {
-        static mut BUF: [u8; 32] = [0u8; 32];
+        let cobs_buf = cx.local.bytecode;
         let serial = cx.local.serial;
 
         if cx.local.usb_dev.poll(&mut [serial]) {
             let mut buf = [0u8; 64];
             match serial.read(&mut buf) {
                 Ok(count) if count > 0 => {
-                    cx.shared.bytecode.lock(|bytecode| {
-                        if let Err(_) = bytecode.extend_from_slice(&buf[0..count]) {
-                            error!("bytecode buffer overflow");
-                        } else {
-                            info!("read {} bytes >> {}", count, bytecode.len());
-                            decode::spawn().unwrap();
-                        }
-                    });
-                    // cx.local.tx.grant_exact(count).map(|mut wgr| {
-                    //     wgr.buf().copy_from_slice(&buf[0..count]);
-                    //     wgr.commit(count);
-                    // });
+                    let mut window = &buf[..];
+
+                    'cobs: while !window.is_empty() {
+                        window = match cobs_buf.feed::<VM<PixelBlazeFFI, F4Runtime>>(&window) {
+                            FeedResult::Consumed => break 'cobs,
+                            FeedResult::OverFull(new_wind) => new_wind,
+                            FeedResult::DeserError(new_wind) => new_wind,
+                            FeedResult::Success { data, remaining } => {
+                                let mut next_vm = data;
+                                cx.shared.executor.lock(|executor| {
+                                    if let Some(vm) = executor.take_vm() {
+                                        let rt = vm.dismember();
+                                        *next_vm.runtime_mut() = rt;
+                                        executor.set_vm(next_vm);
+                                        executor.start();
+                                    }
+                                });
+
+                                remaining
+                            }
+                        };
+                    }
                 }
                 _ => {}
             }
