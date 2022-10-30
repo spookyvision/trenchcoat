@@ -18,14 +18,14 @@ members = ["console-app", "console-compiler"]
 exclude = ["web-app", "stm32f4-app", "minimal-alloc-gated"]
 
 [features]
-full = ["use-std", "compiler", "tty"]
+full = ["use-std", "compiler", "tty", "log"]
 use-std = ["thiserror", "alloc"]
 alloc = ["postcard/alloc"]
 log = ["dep:log"]
 defmt = ["dep:defmt"]
 tty = ["swc_common?/termcolor", "swc_common?/tty-emitter", "dep:clap"]
 compiler = ["use-std", "dep:anyhow", "dep:phf", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
-default = ["use-std", "log"]
+default = ["full"]
 
 [dependencies]
 heapless = "0.7"
