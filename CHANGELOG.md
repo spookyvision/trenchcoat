@@ -2,9 +2,12 @@
 
 ## 0.4
 
+### 0.4.4
+- fixed another embarassing mistake in web app (input cursor jerk)
+
 ### 0.4.3
 - fix CORS workaround in python webserver
-- highly improved web app code sanity
+- highly improved web app code sanity (much less state updates/clones)
 
 ### 0.4.2
 - documentation
