@@ -1,50 +1,28 @@
 use std::{collections::HashMap, str::from_utf8};
 
 use dioxus::{core::to_owned, prelude::*};
-use fermi::{use_atom_state, use_read, Atom, AtomState};
 use futures::StreamExt;
 use gloo::timers::future::TimeoutFuture;
-use runtime::WebRuntime;
 use trenchcoat::{
     forth::{
         compiler::{compile, Compiler, Flavor, MockRuntime},
         vm::VM,
     },
-    pixelblaze::{
-        executor::Executor,
-        ffi::{PixelBlazeFFI, FFI_FUNCS},
-        runtime::ConsoleRuntime,
-        traits::PixelBlazeRuntime,
-    },
+    pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
 };
 
-use crate::{render::LedWidget, runtime::Led};
+use crate::{
+    render::LedWidget,
+    runtime::{Led, WebRuntime},
+};
 
 mod render;
 mod runtime;
 
 type WebExecutor = Executor<PixelBlazeFFI, WebRuntime>;
 
-pub static EXECUTOR: Atom<Option<WebExecutor>> = |_| None;
-
-#[derive(Clone, Copy)]
-struct WebConsole;
-
-impl std::io::Write for WebConsole {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if let Ok(s) = from_utf8(buf) {
-            log::warn!("{s}");
-        }
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 fn main() {
     let base_url: UseState<String>;
-    // init debug tool for WebAssembly
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
     dioxus::web::launch(app);
@@ -52,7 +30,7 @@ fn main() {
 
 #[allow(non_snake_case)]
 #[inline_props]
-fn Pb(cx: Scope, executor: UseRef<Executor<PixelBlazeFFI, WebRuntime>>) -> Element {
+fn Pb(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
     let executor = executor.read();
     let runtime = executor.runtime().unwrap();
     let leds = runtime.leds().unwrap();
@@ -68,12 +46,6 @@ fn Pb(cx: Scope, executor: UseRef<Executor<PixelBlazeFFI, WebRuntime>>) -> Eleme
     let content = rsx!(div { inner });
 
     cx.render(content)
-}
-
-#[allow(non_snake_case)]
-#[inline_props]
-fn Tim(cx: Scope, time: UseState<i32>) -> Element {
-    cx.render(rsx!("Yo dawg… {time}"))
 }
 
 fn app(cx: Scope) -> Element {
