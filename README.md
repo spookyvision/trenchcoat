@@ -35,8 +35,14 @@ Right now the main focus lies on getting pixelblaze support to mature, so that's
 The general approach is:
 
 1. Pick a runtime (console/web/embedded) and compile JavaScript/Pixelblaze source to bytecode
-2. For embedded only: pick an update path - the web app uses inline compilation + HTTP to UART updates for hot code reload, but if you don't need that, you can also use the bundled `console-compiler` to compile bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) and "somehow" have your firmware access it, e.g. via `include_bytes!`
+2. For embedded only: pick an update path - the web app uses inline compilation + HTTP to UART updates for hot code reload, but if you don't need that, you can also use the bundled `console-compiler` to compile bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) and "somehow" have your firmware access it, e.g. via `include_bytes!`. If you want to update via http but your mcu is connected via UART (e.g. the bundled `stm32f4-app`), launch `http-to-serial.py /dev/YOUR-SERIAL-DEVICE` as a bridge.
 3. Spawn an `Executor`, `start()` it once and call `do_frame()` as many times as you wish to produce LED colors. On `no_std` "current time" needs to be advanced manually from some timer source (the example app reuses the frame task's scheduling interval). `Executor::exit()` is optional.
+
+Feature flags to pick:
+- Desktop: `["full"]`
+- Web app/wasm: `["compiler", "log", "use-std"]`
+- Embedded: `["defmt"]` or `["defmt", "alloc"]` when you have an allocator
+  - esp32 with IDF (`std` support): `["log", "use-std"]`
 
 ### WeAct STM32F4x1 aka "USB-C pill", "black pill" 
 
@@ -61,9 +67,9 @@ TODO, up next!
 
 (*a cool bear spawns from an adjacent universe*)
 
-cool bear: Browser? As in ... you're running a rudimentary JavaScript virtual machine ... in the browser ...
+**cool bear:** Browser? As in ... you're running a rudimentary JavaScript virtual machine ... in the browser ...
 
-author, in straightjacket: you got that exactly right. With no performance-boosting offload support whatsoever!
+**author, in straightjacket:** you got that exactly right. With no performance-boosting offload support whatsoever!
 
 On the bright side, we don't need a separate compilation step as part of our build. 
 Because *the compiler also runs in the browser, muahahaha*

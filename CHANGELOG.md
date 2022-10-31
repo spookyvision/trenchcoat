@@ -1,5 +1,14 @@
-0.4.1 - add python web server to bridge http to UART, improve web app
-0.4 - opt-in alloc/`std::collections` support
-0.3 - simplified public compiler api
-0.2 - hot code replacement
-0.1 - initial release
+# Trenchcoat changelog
+
+## 0.4.1
+- add python web server to bridge http to UART, improve web app
+
+## 0.4
+- opt-in alloc/`std::collections` support
+
+## 0.3
+- simplified public compiler api
+## 0.2
+- hot code replacement
+## 0.1 
+- initial release
