@@ -139,11 +139,12 @@ fn app(cx: Scope) -> Element {
                     rows: "20",
                     cols: "80",
                     placeholder: "place code here",
-                    value: "{js}",
                     oninput: move |ev| {
                         let val = ev.value.clone();
                         js.set(val);
                     },
+
+                    "{initial_js}"
                 }
             }
             Pb { executor: executor.clone() }
