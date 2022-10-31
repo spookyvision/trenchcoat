@@ -7,19 +7,25 @@ A questionable combination of JavaScript (in syntax), FORTH (in spirit) and Micr
 - Hot code reloading on embedded without having to flash a whole new binary: especially on `esp32-idf` image size and thus turnaround time can be a bit of an obstacle.
 - Port [Pixelblaze](https://www.bhencke.com/pixelblaze) to Rust.
 
+# See it in action
+
+this is the web app, JavaScript editor + live updated in-browser rendering of the code, alongside hot code reload sent to a `no_std`,`no_alloc` microcontroller
 ![](media/showcase.gif)
 
 ## Features 
 
-Care has been taken to keep runtime platform, language and language dialect generic. This means:
-- runtime: you can run `trenchcoat` on a PC, a microcontroller, or in the browser.
-- language dialect: Pixelblaze-specific JavaScript extensions are factored out and don't pollute the standard JS namespace
-- language: the virtual machine actually executing code is a language-agnostic stack machine, there just happened to be a [JavaScript parser](https://rustdoc.swc.rs/swc_ecma_parser/) lying around. If you want to add, say, Python syntax support, you totally can! I won't! (Pull requests are welcome, though)
+- *extremely* fast turnaround, no noticable delay between code change and web app/mcu update
+
+- Care has been taken to keep runtime platform, language and language dialect generic. This means:
+  - runtime: you can run `trenchcoat` on a PC, a microcontroller, or in the browser.
+  - language dialect: Pixelblaze-specific JavaScript extensions are factored out and don't pollute the standard JS namespace
+  - language: the virtual machine actually executing code is a language-agnostic stack machine, there just happened to be a [JavaScript parser](https://rustdoc.swc.rs/swc_ecma_parser/) lying around. If you want to add, say, Python syntax support, you totally can! I won't! (Pull requests are welcome, though)
 
 ## Limitations
 - Only a very minimal subset of JavaScript and Pixelblaze functionality is supported. You want `for` loops? Maybe in the next release…
 - Extremely unoptimized! Also, basically no prior art has been considered so it's probably full of Arrogant Rookie™ mistakes.
 - Parsing is not available on microcontrollers (so, no on-device REPL). The architecture allows implementing it, though.
+- the existing `no_std` embedded apps don't use an allocator, which means a lot of wasted memory for static buffer headroom. Allocator support is implemented but not currently used.
 - The license needs to be piped through a lawyer.
 
 ## Enough talking, how do I run this?
@@ -29,7 +35,7 @@ Right now the main focus lies on getting pixelblaze support to mature, so that's
 The general approach is:
 
 1. Pick a runtime (console/web/embedded) and compile JavaScript/Pixelblaze source to bytecode
-2. For embedded only: write bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) using the `console-compiler` and "somehow" have your firmware access it. `include_bytes!` is the most straightforward way, but in the near future hot code reload over UART or HTTP will be added.
+2. For embedded only: pick an update path - the web app uses inline compilation + HTTP to UART updates for hot code reload, but if you don't need that, you can also use the bundled `console-compiler` to compile bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) and "somehow" have your firmware access it, e.g. via `include_bytes!`
 3. Spawn an `Executor`, `start()` it once and call `do_frame()` as many times as you wish to produce LED colors. On `no_std` "current time" needs to be advanced manually from some timer source (the example app reuses the frame task's scheduling interval). `Executor::exit()` is optional.
 
 ### WeAct STM32F4x1 aka "USB-C pill", "black pill" 
@@ -46,6 +52,11 @@ cd ../stm32f4-app
 cargo rrb app
 ```
 
+## Espressif C3 (and potentially S2)
+TODO, up next!
+
+## Raspberry Pi Pico
+TODO, up next!
 ### Browser
 
 (*a cool bear spawns from an adjacent universe*)
