@@ -7,6 +7,8 @@ A questionable combination of JavaScript (in syntax), FORTH (in spirit) and Micr
 - Hot code reloading on embedded without having to flash a whole new binary: especially on `esp32-idf` image size and thus turnaround time can be a bit of an obstacle.
 - Port [Pixelblaze](https://www.bhencke.com/pixelblaze) to Rust.
 
+![](media/showcase.gif)
+
 ## Features 
 
 Care has been taken to keep runtime platform, language and language dialect generic. This means:
