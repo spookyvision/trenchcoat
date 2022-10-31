@@ -12,8 +12,17 @@ import logging
 class S(BaseHTTPRequestHandler):
     def _set_response(self):
         self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin:", "*")
         self.send_header("Content-type", "text/plain")
         self.end_headers()
+
+    def do_GET(self):
+        self._set_response()
+        self.wfile.write(b"")
+
+    def do_OPTIONS(self):
+        self._set_response()
+        self.wfile.write(b"")
 
     def do_POST(self):
         content_length = int(
