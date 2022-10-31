@@ -1,9 +1,18 @@
 # Trenchcoat changelog
 
-## 0.4.1
+## 0.4
+
+### 0.4.3
+- fix CORS workaround in python webserver
+- highly improved web app code sanity
+
+### 0.4.2
+- documentation
+
+### 0.4.1
 - add python web server to bridge http to UART, improve web app
 
-## 0.4
+### 0.4.0
 - opt-in alloc/`std::collections` support
 
 ## 0.3
