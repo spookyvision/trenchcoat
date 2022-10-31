@@ -52,10 +52,10 @@ cd ../stm32f4-app
 cargo rrb app
 ```
 
-## Espressif C3 (and potentially S2)
+### Espressif C3 (and potentially S2)
 TODO, up next!
 
-## Raspberry Pi Pico
+### Raspberry Pi Pico
 TODO, up next!
 ### Browser
 
@@ -68,7 +68,7 @@ author, in straightjacket: you got that exactly right. With no performance-boost
 On the bright side, we don't need a separate compilation step as part of our build. 
 Because *the compiler also runs in the browser, muahahaha*
 
-See `main.rs` for more details. Currently the web app is animating rather weirdly because the runtime state management is messed up.
+See `main.rs` for more details. Currently the web app is wildly inefficient (but still plenty fast), and also the editor permanently loses cursor position. WIP.
 
 ```shell
 cargo install --git https://github.com/DioxusLabs/cli # their stable version seems broken atm
