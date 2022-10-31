@@ -11,6 +11,10 @@ h2 {
     color: #aee
 }
 
+textarea {
+    font-size: 75%;
+}
+
 input.override {
     opacity: 0.5;
 }

@@ -7,11 +7,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-trenchcoat = { path = "..", features = ["compiler"]}
+trenchcoat = { path = "..", features = ["compiler", "log", "use-std"], default_features = false}
 chrono = { version = "0.4", features=["wasmbind"] }
 fermi = "0.2"
 gloo =  { version = "0.8", features = ["futures"] }
-
 
 dioxus = { version = "0.2.4", features = ["web"] }
 
@@ -22,3 +21,5 @@ wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.7"
 postcard = { version = "1.0.2", features = ["use-std"] }
 anyhow = "1.0.66"
+surf = {version="2", default_features=false, features=["wasm-client"]}
+futures = "0.3.25"
