@@ -52,101 +52,87 @@ fn main() {
 
 #[allow(non_snake_case)]
 #[inline_props]
-fn Pb(cx: Scope) -> Element {
-    let executor_state = use_atom_state(&cx, EXECUTOR);
-    let mut content = rsx!("something's missing");
-
-    if let Some(executor) = executor_state.get() {
-        if let Some(runtime) = executor.runtime() {
-            if let Some(leds) = runtime.leds() {
-                let inner = leds.iter().cloned().enumerate().map(|(led_id, led)| {
-                    rsx! {
-                        div {
-                            class: "square-container",
-                            key: "led-{led_id}",
-                            LedWidget { led: led }
-                        }
-                    }
-                });
-                content = rsx!(div { inner });
+fn Pb(cx: Scope, executor: UseRef<Executor<PixelBlazeFFI, WebRuntime>>) -> Element {
+    let executor = executor.read();
+    let runtime = executor.runtime().unwrap();
+    let leds = runtime.leds().unwrap();
+    let inner = leds.iter().cloned().enumerate().map(|(led_id, led)| {
+        rsx! {
+            div {
+                class: "square-container",
+                key: "led-{led_id}",
+                LedWidget { led: led }
             }
         }
-    }
+    });
+    let content = rsx!(div { inner });
 
     cx.render(content)
 }
 
+#[allow(non_snake_case)]
+#[inline_props]
+fn Tim(cx: Scope, time: UseState<i32>) -> Element {
+    cx.render(rsx!("Yo dawg… {time}"))
+}
+
 fn app(cx: Scope) -> Element {
-    let executor_state = use_atom_state(&cx, EXECUTOR);
-    let js = use_state(&cx, || {
-        include_str!("../../res/rainbow melt.js").to_string()
+    let initial_js = include_str!("../../res/rainbow melt.js").to_string();
+    let executor = use_ref(&cx, || {
+        let mut ser = compile(initial_js.as_str(), Flavor::Pixelblaze).unwrap();
+        let mut vm: VM<PixelBlazeFFI, WebRuntime> = postcard::from_bytes_cobs(&mut ser).unwrap();
+        let pixel_count = 40;
+        vm.runtime_mut().init(pixel_count);
+        let mut executor = Executor::new(vm, pixel_count);
+
+        executor.start();
+        executor
     });
+    let js = use_state(&cx, || initial_js.clone());
 
-    let js_ = js.clone();
+    let ex2 = executor.clone();
+    let update_executor = use_coroutine(&cx, |mut rx: UnboundedReceiver<Vec<u8>>| async move {
+        let executor = ex2;
+        while let Some(mut ser) = rx.next().await {
+            log::debug!("refresh executor");
 
-    let send_to_mcu = use_coroutine(&cx, |mut rx: UnboundedReceiver<String>| async move {
-        // TODO 420 surf it
-        while let Some(msg) = rx.next().await {
-            log::debug!("code updated: {msg}");
+            let mut next_vm: VM<PixelBlazeFFI, WebRuntime> =
+                postcard::from_bytes_cobs(&mut ser).unwrap();
+            let pixel_count = 40;
+            next_vm.runtime_mut().init(pixel_count);
 
-            if let Ok(mut ser) = compile(&msg, Flavor::Pixelblaze) {
-                let url = "http://localhost:8008/";
-                surf::post(url)
-                    .content_type("multipart/form-data")
-                    .body_bytes(&ser)
-                    .await;
-            }
+            let vm = executor.write_silent().take_vm().unwrap();
+            let rt = vm.dismember();
+            *next_vm.runtime_mut() = rt;
+            executor.write_silent().set_vm(next_vm);
+            executor.write().start();
+        }
+    })
+    .to_owned();
+
+    let _code_updated = use_future(&cx, (js,), |(js,)| async move {
+        if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
+            update_executor.send(ser.clone());
+
+            log::debug!("updating mcu");
+            let url = "http://localhost:8008/";
+            surf::post(url)
+                .content_type("multipart/form-data")
+                .body_bytes(&ser)
+                .await;
         }
     });
 
-    let executor_state = use_atom_state(&cx, EXECUTOR);
-    let dog = use_future(
-        &cx,
-        (js, executor_state),
-        |(js, executor_state)| async move {
-            log::debug!("666 trench it {}", js);
-            if let Ok(mut ser) = compile(js.as_str(), Flavor::Pixelblaze) {
-                let mut next_vm: VM<PixelBlazeFFI, WebRuntime> =
-                    postcard::from_bytes_cobs(&mut ser).unwrap();
-                let pixel_count = 40;
-                next_vm.runtime_mut().init(pixel_count);
+    cx.spawn({
+        to_owned![executor];
+        async move {
+            TimeoutFuture::new(100).await;
+            executor.write().do_frame();
+        }
+    });
 
-                executor_state.with_mut(|executor| {
-                    if let Some(executor) = executor {
-                        if let Some(vm) = executor.take_vm() {
-                            let rt = vm.dismember();
-                            *next_vm.runtime_mut() = rt;
-                            executor.set_vm(next_vm);
-                            executor.start();
-                        }
-                    } else {
-                        let mut nextecutor = Executor::new(next_vm, pixel_count);
-
-                        nextecutor.start();
-                        *executor = Some(nextecutor);
-                    }
-                });
-            }
-        },
-    );
-
-    // TODO this causes a respawn loop, because we depend on executor_state while also modifying it
-    let _irish_setter: &UseFuture<()> =
-        use_future(&cx, (executor_state,), |(executor_state,)| async move {
-            loop {
-                executor_state.with_mut(|executor| {
-                    if let Some(executor) = executor {
-                        executor.do_frame();
-                    }
-                });
-                TimeoutFuture::new(1000).await;
-            }
-        });
-
-    cx.render(rsx! (
-        div {
-            style: "text-align: center;",
-            h1 { "Yo dawg…" }
+    cx.render(rsx! {
+        h1 { "Trenchcoat!" }
             form {
                 textarea  {
                     name: "input_js",
@@ -156,13 +142,11 @@ fn app(cx: Scope) -> Element {
                     value: "{js}",
                     oninput: move |ev| {
                         let val = ev.value.clone();
-                        send_to_mcu.send(val.clone());
-                        log::debug!("{val}");
                         js.set(val);
                     },
                 }
             }
-            Pb { }
-        }
-    ))
+            Pb { executor: executor.clone() }
+
+    })
 }
