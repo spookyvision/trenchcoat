@@ -99,7 +99,7 @@ mod app {
 
         let pixel_count = 16;
         let mut vm = VM::new_empty(F4Runtime::default());
-        vm.runtime_mut().set_ws(Some(ws));
+        vm.runtime_mut().init(Some(ws));
         let executor = Executor::new(vm, pixel_count);
 
         defmt::debug!("executor size is {}", size_of_val(&executor));

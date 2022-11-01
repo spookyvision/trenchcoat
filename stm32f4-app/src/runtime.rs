@@ -39,7 +39,7 @@ impl F4Runtime {
         self.time = now;
     }
 
-    pub fn set_ws(&mut self, ws: Option<WS>) {
+    pub fn init(&mut self, ws: Option<WS>) {
         self.ws = ws;
     }
 
