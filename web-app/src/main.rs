@@ -50,10 +50,11 @@ fn Pixel(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
 
 fn app(cx: Scope) -> Element {
     let initial_js = include_str!("../../res/rainbow melt.js").to_string();
+    let pixel_count = 40;
+
     let executor = use_ref(&cx, || {
         let mut ser = compile(initial_js.as_str(), Flavor::Pixelblaze).unwrap();
         let mut vm: VM<PixelBlazeFFI, WebRuntime> = postcard::from_bytes_cobs(&mut ser).unwrap();
-        let pixel_count = 40;
         vm.runtime_mut().init(pixel_count);
         let mut executor = Executor::new(vm, pixel_count);
 
@@ -70,7 +71,6 @@ fn app(cx: Scope) -> Element {
 
             let mut next_vm: VM<PixelBlazeFFI, WebRuntime> =
                 postcard::from_bytes_cobs(&mut ser).unwrap();
-            let pixel_count = 40;
             next_vm.runtime_mut().init(pixel_count);
 
             let vm = executor.write_silent().take_vm().unwrap();
