@@ -1,0 +1,40 @@
+[package]
+name = "http-server"
+version = "0.1.0"
+authors = ["Anatol Ulrich <anatol.ulrich@ferrous-systems.com>"]
+edition = "2018"
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+default = ["native"]
+native = ["esp-idf-sys/native"]
+
+[dependencies]
+esp32c3 = "=0.6"
+esp-idf-sys = { version = "=0.31.10", features = ["binstart", "native"] }
+# stuff's broken atm
+# esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git"}
+# esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git"}
+# embedded-svc = { git = "https://github.com/esp-rs/embedded-svc.git", features = ["experimental"]}
+
+ esp-idf-svc = "=0.42.5"
+ esp-idf-hal = "=0.38.1"
+ embedded-svc = "=0.22.1"
+
+anyhow = "1.0"
+toml-cfg = "0.1"
+rgb = "0.8"
+log = "0.4"
+bytemuck = {version = "1", features=["derive"]}
+
+
+[build-dependencies]
+embuild = "=0.30.4"
+anyhow = "1"
