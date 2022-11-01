@@ -1,9 +1,16 @@
 use core::str;
 use std::{
     sync::{Arc, Condvar, Mutex},
-    thread::sleep,
+    thread::{sleep, JoinHandle},
     time::Duration,
 };
+
+use trenchcoat::{
+    forth::vm::VM,
+    pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
+};
+mod runtime;
+use crate::runtime::{EspRuntime, Led};
 
 mod bsc;
 use anyhow::{anyhow, bail};
@@ -17,7 +24,8 @@ use embedded_svc::{
 use esp_idf_svc::{
     httpd, netif::EspNetifStack, nvs::EspDefaultNvs, sysloop::EspSysLoopStack, wifi::EspWifi,
 };
-use esp_idf_sys as _; // If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
+// ivmarkov: "binstart gives you a regular Rust STD fn main()"
+// If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
 use esp_idf_sys::{self, c_types, esp, EspError};
 use log::info;
 #[toml_cfg::toml_config]
@@ -28,7 +36,8 @@ pub struct Config {
     wifi_psk: &'static str,
 }
 
-// ivmarkov: "binstart gives you a regular Rust STD fn main()"
+static VM_BYTES: &[u8; 239] = include_bytes!("../../res/rainbow melt.tcb");
+
 fn main() -> anyhow::Result<()> {
     esp_idf_sys::link_patches();
 
@@ -38,7 +47,7 @@ fn main() -> anyhow::Result<()> {
     let _wifi = bsc::wifi::wifi(app_config.wifi_ssid, app_config.wifi_psk)?;
 
     let mutex = Arc::new((Mutex::new(None), Condvar::new()));
-    let _httpd = httpd(mutex.clone())?;
+    let (_httpd, _vm_thread) = httpd(mutex.clone())?;
 
     // loop {
     //     println!("main…");
@@ -46,6 +55,12 @@ fn main() -> anyhow::Result<()> {
     // }
 
     let _wait = mutex.0.lock().unwrap();
+    println!("kbye");
+    loop {
+        println!("main…");
+        sleep(Duration::from_millis(1000));
+    }
+
     Ok(())
 }
 
@@ -57,7 +72,32 @@ struct Wifi {
     default_nvs: Arc<EspDefaultNvs>,
 }
 
-fn httpd(mutex: Arc<(Mutex<Option<u32>>, Condvar)>) -> anyhow::Result<httpd::Server> {
+fn httpd(
+    mutex: Arc<(Mutex<Option<u32>>, Condvar)>,
+) -> anyhow::Result<(httpd::Server, JoinHandle<()>)> {
+    // let _vm_thread = std::thread::spawn(vm);
+    let mut bytecode = vec![0; 512];
+    bytecode[0..VM_BYTES.len()].copy_from_slice(VM_BYTES.as_slice());
+    let mut vm = postcard::from_bytes_cobs::<VM<PixelBlazeFFI, EspRuntime>>(&mut bytecode).unwrap();
+
+    let pixel_count = 1;
+    vm.runtime_mut().init(pixel_count);
+    let mut executor = Executor::new(vm, pixel_count);
+    executor.start();
+    let executor = Arc::new(Mutex::new(executor));
+
+    let frame_ex = executor.clone();
+    let vm_thread_handle = std::thread::spawn(move || loop {
+        let handle = frame_ex.lock();
+        match handle {
+            Ok(mut executor) => {
+                executor.do_frame();
+            }
+            Err(e) => println!("mutex bork! {e:?}"),
+        }
+        sleep(Duration::from_millis(100));
+    });
+
     let server = httpd::ServerRegistry::new()
         .at("/")
         .get(|_| Ok("Hello from Rust!".into()))?
@@ -76,31 +116,7 @@ fn httpd(mutex: Arc<(Mutex<Option<u32>>, Condvar)>) -> anyhow::Result<httpd::Ser
     #[cfg(esp32s2)]
     let server = httpd_ulp_endpoints(server, mutex)?;
 
-    server.start(&Default::default())
-}
+    let server = server.start(&Default::default());
 
-fn templated(content: impl AsRef<str>) -> String {
-    format!(
-        r#"
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <title>esp-rs web server</title>
-    </head>
-    <body>
-        {}
-    </body>
-</html>
-"#,
-        content.as_ref()
-    )
-}
-
-fn index_html() -> String {
-    templated("Hello from mcu!")
-}
-
-fn temperature(val: f32) -> String {
-    templated(format!("chip temperature: {:.2}°C", val))
+    server.map(|server| (server, vm_thread_handle))
 }
