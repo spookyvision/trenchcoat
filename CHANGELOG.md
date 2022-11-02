@@ -2,6 +2,10 @@
 
 ## 0.4
 
+### 0.4.5
+- esp32 app
+- web app: add endpoint selection
+
 ### 0.4.4
 - fixed another embarassing mistake in web app (input cursor jerk)
 
