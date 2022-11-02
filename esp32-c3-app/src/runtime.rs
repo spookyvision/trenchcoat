@@ -1,8 +1,12 @@
 use std::time::Instant;
 
+use log::{debug, info, warn};
+use rgb::RGB8;
 use trenchcoat::{
     forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
 };
+
+use crate::bsc::led::WS2812RMT;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Led {
@@ -17,8 +21,8 @@ impl Led {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
 pub struct EspRuntime {
+    led_peri: Option<WS2812RMT>,
     led_idx: usize,
     leds: Option<Vec<Led>>,
     started_at: Instant,
@@ -27,6 +31,7 @@ pub struct EspRuntime {
 impl Default for EspRuntime {
     fn default() -> Self {
         Self {
+            led_peri: None,
             led_idx: Default::default(),
             leds: Default::default(),
             started_at: Instant::now(),
@@ -35,6 +40,11 @@ impl Default for EspRuntime {
 }
 impl EspRuntime {
     pub fn init(&mut self, pixel_count: usize) {
+        let mut led_peri = WS2812RMT::new().expect("could not initialize LED peripheral");
+        led_peri
+            .set_pixel(RGB8::new(0, 1, 1))
+            .expect("could not set pixel");
+        self.led_peri = Some(led_peri);
         let mut leds = Vec::with_capacity(pixel_count);
         for _ in 0..pixel_count {
             leds.push(Led::default())
@@ -49,10 +59,15 @@ impl EspRuntime {
 impl Peripherals for EspRuntime {
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         if let Some(leds) = self.leds.as_mut() {
-            leds[self.led_idx] = Led::new(h.to_num(), s.to_num(), v.to_num());
-            log::info!("ohai {:?}", leds);
-            log::warn!("test warn");
-            println!("ohai {:?}", leds);
+            let h: u8 = (h * 255).to_num();
+            let s: u8 = (s * 255).to_num();
+            let v: u8 = (v * 255).to_num();
+            let rgb = hsv2rgb(h, s, v);
+
+            if let Some(led_peri) = self.led_peri.as_mut() {
+                debug!("{rgb:?}");
+                led_peri.set_pixel(rgb);
+            }
         }
     }
 
@@ -67,6 +82,54 @@ impl VanillaJSRuntime for EspRuntime {
     }
 
     fn log(&mut self, s: &str) {
-        log::debug!("[LOG] {s}");
+        debug!("[LOG] {s}");
+    }
+}
+
+use rgb::RGB;
+pub fn hsv2rgb(h: u8, s: u8, v: u8) -> RGB8 {
+    let v = h as u16;
+    let s = s as u16;
+    let f = (h as u16 * 2 % 85) * 3; // relative interval
+
+    let p = v * (255 - s) / 255;
+    let q = v * (255 - (s * f) / 255) / 255;
+    let t = v * (255 - (s * (255 - f)) / 255) / 255;
+    match h {
+        0..=42 => RGB {
+            r: v as u8,
+            g: t as u8,
+            b: p as u8,
+        },
+        43..=84 => RGB {
+            r: q as u8,
+            g: v as u8,
+            b: p as u8,
+        },
+        85..=127 => RGB {
+            r: p as u8,
+            g: v as u8,
+            b: t as u8,
+        },
+        128..=169 => RGB {
+            r: p as u8,
+            g: q as u8,
+            b: v as u8,
+        },
+        170..=212 => RGB {
+            r: t as u8,
+            g: p as u8,
+            b: v as u8,
+        },
+        213..=254 => RGB {
+            r: v as u8,
+            g: p as u8,
+            b: q as u8,
+        },
+        255 => RGB {
+            r: v as u8,
+            g: t as u8,
+            b: p as u8,
+        },
     }
 }

@@ -743,25 +743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "embedded-svc",
- "embuild 0.30.4",
- "esp-idf-hal",
- "esp-idf-svc",
- "esp-idf-sys",
- "esp32c3",
- "indexmap",
- "log",
- "postcard",
- "rgb",
- "toml-cfg",
- "trenchcoat",
-]
-
-[[package]]
 name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1441,6 +1422,25 @@ dependencies = [
  "postcard",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "trenchcoat-esp32"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "embedded-svc",
+ "embuild 0.30.4",
+ "esp-idf-hal",
+ "esp-idf-svc",
+ "esp-idf-sys",
+ "esp32c3",
+ "indexmap",
+ "log",
+ "postcard",
+ "rgb",
+ "toml-cfg",
+ "trenchcoat",
 ]
 
 [[package]]
