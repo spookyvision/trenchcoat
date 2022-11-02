@@ -1,8 +1,10 @@
 use std::{collections::HashMap, str::from_utf8};
 
+use config::Config;
 use dioxus::{core::to_owned, prelude::*};
-use futures::StreamExt;
+use futures::{future, StreamExt};
 use gloo::timers::future::TimeoutFuture;
+use serde::Deserialize;
 use trenchcoat::{
     forth::{
         compiler::{compile, Flavor},
@@ -48,19 +50,21 @@ fn Pixels(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
     cx.render(content)
 }
 
-#[allow(non_snake_case)]
-#[inline_props]
-fn Input(cx: Scope, text: UseState<String>) -> Element {
-    cx.render(rsx! {
-        input { oninput: move |evt| text.set(evt.value.clone()) }
-    })
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+struct AppConfig {
+    endpoints: Vec<String>,
+    pixel_count: usize,
+    initial_js_file: String,
+    initial_js: Option<String>,
 }
 
 fn app(cx: Scope) -> Element {
-    let initial_js = include_str!("../../res/rainbow melt.js").to_string();
-    let pixel_count = 40;
+    let config: AppConfig =
+        postcard::from_bytes(include_bytes!(concat!(env!("OUT_DIR"), "/config.ser"))).unwrap();
 
-    let text = use_state(&cx, || "default".to_string());
+    let pixel_count = config.pixel_count;
+
+    let initial_js = config.initial_js.unwrap();
 
     let executor = use_ref(&cx, || {
         let mut ser = compile(initial_js.as_str(), Flavor::Pixelblaze).unwrap();
@@ -96,14 +100,18 @@ fn app(cx: Scope) -> Element {
         if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
             update_executor.send(ser.clone());
 
-            log::debug!("updating mcu");
-            // TODO make configurable
-            let url = "http://localhost:8008/";
-            let url = "http://192.168.178.150/";
-            surf::post(url)
-                .content_type("multipart/form-data")
-                .body_bytes(&ser)
-                .await;
+            let mut futs = vec![];
+            for url in config.endpoints.iter().cloned() {
+                let ser = ser.clone();
+                futs.push(async move {
+                    log::debug!("updating endpoint at {url}");
+                    surf::post(url)
+                        .content_type("multipart/form-data")
+                        .body_bytes(&ser)
+                        .await;
+                });
+            }
+            future::join_all(futs).await;
         }
     });
 
@@ -116,9 +124,7 @@ fn app(cx: Scope) -> Element {
     });
 
     cx.render(rsx! {
-        h1 { "Trenchcoat!" }
-        h2 { "{text}"}
-        Input { text: text.clone() }
+        h1 { "Welcome to Trenchcoat!" }
         form {
             textarea  {
                 name: "input_js",

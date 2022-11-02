@@ -1,0 +1,3 @@
+endpoints = ["http://localhost:8008/", "http://192.168.178.150/"]
+pixel_count = 40
+initial_js_file = "../res/rainbow melt.js"

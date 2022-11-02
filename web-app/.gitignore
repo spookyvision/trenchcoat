@@ -10,3 +10,6 @@ Cargo.lock
 
 # Dioxus artifacts
 /dist
+
+# app config
+config.toml
