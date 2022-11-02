@@ -30,7 +30,7 @@ fn main() {
 
 #[allow(non_snake_case)]
 #[inline_props]
-fn Pixel(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
+fn Pixels(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
     let executor = executor.read();
     let runtime = executor.runtime().unwrap();
     let leds = runtime.leds().unwrap();
@@ -48,9 +48,19 @@ fn Pixel(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
     cx.render(content)
 }
 
+#[allow(non_snake_case)]
+#[inline_props]
+fn Input(cx: Scope, text: UseState<String>) -> Element {
+    cx.render(rsx! {
+        input { oninput: move |evt| text.set(evt.value.clone()) }
+    })
+}
+
 fn app(cx: Scope) -> Element {
     let initial_js = include_str!("../../res/rainbow melt.js").to_string();
     let pixel_count = 40;
+
+    let text = use_state(&cx, || "default".to_string());
 
     let executor = use_ref(&cx, || {
         let mut ser = compile(initial_js.as_str(), Flavor::Pixelblaze).unwrap();
@@ -87,7 +97,9 @@ fn app(cx: Scope) -> Element {
             update_executor.send(ser.clone());
 
             log::debug!("updating mcu");
+            // TODO make configurable
             let url = "http://localhost:8008/";
+            let url = "http://192.168.178.150/";
             surf::post(url)
                 .content_type("multipart/form-data")
                 .body_bytes(&ser)
@@ -105,21 +117,22 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         h1 { "Trenchcoat!" }
-            form {
-                textarea  {
-                    name: "input_js",
-                    rows: "20",
-                    cols: "80",
-                    placeholder: "place code here",
-                    oninput: move |ev| {
-                        let val = ev.value.clone();
-                        js.set(val);
-                    },
+        h2 { "{text}"}
+        Input { text: text.clone() }
+        form {
+            textarea  {
+                name: "input_js",
+                rows: "20",
+                cols: "80",
+                placeholder: "place code here",
+                oninput: move |ev| {
+                    let val = ev.value.clone();
+                    js.set(val);
+                },
 
-                    "{initial_js}"
-                }
+                "{initial_js}"
             }
-            Pixel { executor: executor.clone() }
-
+        }
+        Pixels { executor: executor.clone() }
     })
 }
