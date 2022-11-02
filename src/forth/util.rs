@@ -1,12 +1,8 @@
 use super::vm::{Cell, CellData, VM};
 
-#[cfg(test)]
-pub fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
-    let fac = 10f64.powf(decimals as _);
-    let actual = (actual.to_num::<f64>() * fac).round() as i32;
-    let expected = (expected * fac).round() as i32;
-    assert_eq!(actual, expected);
-}
+// TODO medium sized wart, what do?
+#[derive(Clone, PartialEq, Default)]
+pub struct MockRuntime;
 
 // TODO maybe better wrap a Cow?
 pub struct StackSlice<'a, T>(pub &'a [Cell<T>]);
@@ -68,6 +64,15 @@ pub fn pack<'a, FFI: 'a>(slice: &'a [u8]) -> impl DoubleEndedIterator<Item = Cel
     packed.chain(other)
 }
 
+#[cfg(test)]
+pub fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
+    let fac = 10f64.powf(decimals as _);
+    let actual = (actual.to_num::<f64>() * fac).round() as i32;
+    let expected = (expected * fac).round() as i32;
+    assert_eq!(actual, expected);
+}
+
+// TODO move tests where they belong
 #[cfg(test)]
 mod tests {
     use core::str::from_utf8;

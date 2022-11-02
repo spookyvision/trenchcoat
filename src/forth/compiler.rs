@@ -13,7 +13,10 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_utils::ExprExt;
 use swc_ecma_visit::Visit;
 
-use super::vm::{types::VMVec, Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM};
+use super::{
+    util::MockRuntime,
+    vm::{types::VMVec, Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM},
+};
 use crate::{
     pixelblaze::{self, runtime::ConsoleRuntime},
     vanillajs,
@@ -25,10 +28,6 @@ pub enum Flavor {
     VanillaJS,
     Pixelblaze,
 }
-
-// TODO medium sized wart
-#[derive(Clone, PartialEq, Default)]
-pub struct MockRuntime;
 
 #[cfg(feature = "tty")]
 pub type Source = Box<std::path::Path>;
