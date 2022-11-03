@@ -2,8 +2,11 @@
 name = "trenchcoat"
 version = "0.4.5"
 edition = "2021"
+authors = ["Anatol Ulrich"]
 
+# read it please
 license-file = "LICENSE.txt"
+
 description = "JavaScript-ish virtual machine for embedded, LEDs, hot code reload, etc."
 homepage = "https://github.com/spookyvision/trenchcoat"
 repository = "https://github.com/spookyvision/trenchcoat"

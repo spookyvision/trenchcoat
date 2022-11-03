@@ -1,6 +1,5 @@
 [package]
-# TODO fix `authors` and `name` if you didn't use `cargo-generate`
-authors = ["Anatol Ulrich <anatol@versteht.es>"]
+authors = ["Anatol Ulrich"]
 name = "stm32f4-app"
 edition = "2018"
 version = "0.1.0"
