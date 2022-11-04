@@ -1,12 +1,16 @@
 use std::time::Instant;
 
+#[cfg(feature = "ws2812")]
+use bsc::led::WS2812RMT;
+#[cfg(feature = "apa102")]
+use espidf_apa102::Apa;
 use log::{debug, info, warn};
 use rgb::RGB8;
 use trenchcoat::{
     forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
 };
 
-use crate::bsc::led::WS2812RMT;
+use crate::app_config::AppConfig;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Led {
@@ -22,6 +26,9 @@ impl Led {
 }
 
 pub struct EspRuntime {
+    #[cfg(feature = "apa102")]
+    led_peri: Option<Apa>,
+    #[cfg(feature = "ws2812")]
     led_peri: Option<WS2812RMT>,
     led_idx: usize,
     leds: Option<Vec<Led>>,
@@ -39,19 +46,25 @@ impl Default for EspRuntime {
     }
 }
 impl EspRuntime {
-    pub fn init(&mut self, pixel_count: usize) {
-        let mut led_peri = WS2812RMT::new().expect("could not initialize LED peripheral");
-        led_peri
-            .set_pixel(RGB8::new(0, 1, 1))
-            .expect("could not set pixel");
+    pub(crate) fn init(&mut self, config: &AppConfig) {
+        log::info!("RT init");
+        #[cfg(feature = "ws2812")]
+        let mut led_peri =
+            WS2812RMT::new(config.data_pin).expect("could not initialize LED peripheral");
+        #[cfg(feature = "apa102")]
+        let mut led_peri = Apa::new(espidf_apa102::Config::new(
+            config.data_pin,
+            config.clock_pin.unwrap(),
+        ));
+
         self.led_peri = Some(led_peri);
-        let mut leds = Vec::with_capacity(pixel_count);
-        for _ in 0..pixel_count {
+        let mut leds = Vec::with_capacity(config.pixel_count);
+        for _ in 0..config.pixel_count {
             leds.push(Led::default())
         }
         self.leds = Some(leds);
     }
-    pub fn leds(&self) -> Option<&Vec<Led>> {
+    pub(crate) fn leds(&self) -> Option<&Vec<Led>> {
         self.leds.as_ref()
     }
 }
@@ -65,14 +78,20 @@ impl Peripherals for EspRuntime {
             let rgb = hsv2rgb(h, s, v);
 
             if let Some(led_peri) = self.led_peri.as_mut() {
-                debug!("{rgb:?}");
-                led_peri.set_pixel(rgb);
+                led_peri.set_pixel(self.led_idx, rgb.into());
             }
         }
     }
 
     fn set_led_idx(&mut self, idx: usize) {
         self.led_idx = idx;
+    }
+
+    fn led_commit(&mut self) {
+        if let Some(led_peri) = self.led_peri.as_mut() {
+            // log::info!("flush");
+            led_peri.flush();
+        }
     }
 }
 
@@ -82,13 +101,13 @@ impl VanillaJSRuntime for EspRuntime {
     }
 
     fn log(&mut self, s: &str) {
-        debug!("[LOG] {s}");
+        // debug!("[LOG] {s}");
     }
 }
 
 use rgb::RGB;
 pub fn hsv2rgb(h: u8, s: u8, v: u8) -> RGB8 {
-    let v = h as u16;
+    let v = v as u16;
     let s = s as u16;
     let f = (h as u16 * 2 % 85) * 3; // relative interval
 

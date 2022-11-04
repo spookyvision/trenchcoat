@@ -90,8 +90,11 @@ unsafe extern "C" fn ws2812_to_rmt(
 pub struct WS2812RMT {
     config: rmt_config_t,
 }
+
+// esp-rs board internal LED is on gpio2
+
 impl WS2812RMT {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(pin: i32) -> anyhow::Result<Self> {
         let rmt_tx_config = rmt_tx_config_t {
             carrier_freq_hz: 38000,
             carrier_level: 1,
@@ -106,7 +109,7 @@ impl WS2812RMT {
         let config = rmt_config_t {
             rmt_mode: rmt_mode_t_RMT_MODE_TX,
             channel: 0,
-            gpio_num: 2,
+            gpio_num: pin,
             clk_div: 2,
             mem_block_num: 1,
             flags: 0,

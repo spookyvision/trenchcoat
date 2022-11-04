@@ -1,6 +1,6 @@
 // based on https://github.com/ivmarkov/rust-esp32-std-demo/blob/main/src/main.rs
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::bail;
 use embedded_svc::wifi::{
@@ -11,7 +11,6 @@ use esp_idf_svc::{
     netif::EspNetifStack, nvs::EspDefaultNvs, sysloop::EspSysLoopStack, wifi::EspWifi,
 };
 use log::info;
-use std::time::Duration;
 
 #[allow(unused)]
 pub struct Wifi {
