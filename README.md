@@ -35,7 +35,7 @@ Right now the main goal is getting pixelblaze support to mature, so that's also 
 
 The general approach is:
 
-1. Pick a runtime (console/web/embedded) and compile JavaScript/Pixelblaze source to bytecode
+1. Pick a runtime (console/web/embedded) and compile JavaScript/Pixelblaze source to bytecode. Pixelblaze examples can be found in `res/`, though as of version `0.5` only `rainbow melt.js` is verified to work - lots of implementation details are still missing!
 2. For embedded only: pick an update path - the web app uses inline compilation + HTTP to UART updates for hot code reload, but if you don't need that, you can also use the bundled `console-compiler` to compile bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) and "somehow" have your firmware access it, e.g. via `include_bytes!`. If you want to update via http but your mcu is connected via UART (e.g. the bundled `stm32f4-app`), launch `http-to-serial.py /dev/YOUR-SERIAL-DEVICE` as a bridge.
 3. Spawn an `Executor`, `start()` it once and call `do_frame()` as many times as you wish to produce LED colors. On `no_std`, "current time" needs to be advanced manually from some timer source (the example app reuses the frame task's scheduling interval). `Executor::exit()` is optional.
 
@@ -54,12 +54,17 @@ Feature flag sets to pick:
 
 ```shell
 cd console-compiler
-# rainbow melt is the only verified-working file at the moment
 cargo run -- -f pixelblaze -i ../res/rainbow\ melt.js -o "../res/rainbow melt.tcb" 
 cd ../stm32f4-app
 # probe-run is required
 cargo rrb app
 ```
+
+at this point you can either send the `.tcb` data over via `cat ../res/rainbow melt.tcb > /dev/<USB UART>`, or spin up the web code editor & python web-to-uart bridge for live editing fun!
+
+#### Help, the app crashes saying the heap is too damn full!
+
+try increasing `HEAP_SIZE` in `src/bin/app.rs`.
 
 ### Espressif C3 
 
@@ -67,7 +72,7 @@ The current iteration supports APA102/SK9822 LEDs, support for WS2812 will be ad
 
 in `esp32-c3-app` there's a `config.toml.example` - copy that to `config.toml` and edit your wifi & LED settings.
 
-Build, flash and run using `cargo espflash --monitor /dev/<ESP UART HERE>`. The station (device) IP will be printed on successfully joining the wifi network. Put this IP in the web app `config.toml` list of `endpoints=`.
+Build, flash and run using `cargo espflash --monitor /dev/<ESP UART HERE>`. The station (device) IP will be printed on successfully joining the wifi network. Put this IP in the web app `config.toml` list of `endpoints=` and start the web app (or use `console-compiler` & `curl` to POST new bytecode to `http://<station ip>/`).
 
 ### Espressif S2
 
