@@ -5,8 +5,10 @@ use fixed::{
     types::extra::{U16, U8},
     FixedI32,
 };
-#[cfg(not(feature = "alloc"))]
-use heapless::Entry;
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[cfg(not(feature = "alloc"))]
@@ -21,15 +23,25 @@ pub(crate) mod types {
     pub type VMVec<T, const N: usize> = heapless::Vec<T, N>;
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "use-std")))]
+use alloc::collections::btree_map::Entry;
+#[cfg(feature = "use-std")]
 use std::collections::hash_map::Entry;
+
+#[cfg(not(feature = "alloc"))]
+use heapless::Entry;
+
 #[cfg(feature = "alloc")]
+
 pub(crate) mod types {
 
     use super::Cell;
 
-    pub type VarString = String;
+    pub type VarString = alloc::string::String;
+    #[cfg(feature = "use-std")]
     pub type Map<K, V, const N: usize> = std::collections::HashMap<K, V>;
+    #[cfg(not(feature = "use-std"))]
+    pub type Map<K, V, const N: usize> = alloc::collections::btree_map::BTreeMap<K, V>;
 
     pub type Stack<FFI, const N: usize> = alloc::vec::Vec<Cell<FFI>>;
     pub type VMVec<T, const N: usize> = alloc::vec::Vec<T>;
@@ -452,7 +464,6 @@ where
             return local_entry.into_mut();
         }
 
-        let capacity = self.globals.capacity();
         match self.globals.entry(name.into()) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(missing) => {
