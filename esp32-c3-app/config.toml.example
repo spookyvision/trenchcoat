@@ -1,0 +1,5 @@
+wifi_ssid = "FBI surveillance van"
+wifi_psk = "hunter2"
+pixel_count = 16
+data_pin = 7
+clock_pin = 6
