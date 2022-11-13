@@ -1,6 +1,12 @@
 #![no_std]
+#![feature(alloc_error_handler)]
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+extern crate alloc;
+
+use core::{
+    alloc::Layout,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use defmt_rtt as _; // global logger
 // TODO adjust HAL import
@@ -29,4 +35,9 @@ pub fn exit() -> ! {
     loop {
         cortex_m::asm::bkpt();
     }
+}
+
+#[alloc_error_handler]
+fn oom(_: Layout) -> ! {
+    panic!("the heap is too damn full");
 }

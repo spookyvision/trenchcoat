@@ -12,7 +12,10 @@ cortex-m-rtic = "1.1"
 cortex-m = "0.7"
 dwt-systick-monotonic = "1.0"
 fugit = "0.3"
-trenchcoat = { path = "..", features = ["defmt"], default-features = false }
+trenchcoat = { path = "..", features = [
+    "defmt",
+    "alloc",
+], default-features = false }
 f4-peri = { git = "https://github.com/spookyvision/f4-peri.git", version = "*" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
@@ -23,6 +26,7 @@ usb-device = "0.2"
 usbd-serial = "0.1"
 bbqueue = { version = "0.5.1", features = ["defmt_0_3"] }
 heapless = { version = "0.7.16", features = ["defmt", "defmt-impl"] }
+alloc-cortex-m = "0.4.3"
 
 
 [dependencies.stm32f4xx-hal]

@@ -8,11 +8,12 @@ use stm32f4_app as _; // global logger + panicking-behavior + memory layout
     dispatchers = [EXTI3] // TODO: Replace the `FreeInterrupt1, ...` with free interrupt vectors if software tasks are used
 )]
 mod app {
-    use core::mem::size_of_val;
+    use core::mem::{size_of_val, MaybeUninit};
 
+    use alloc_cortex_m::CortexMHeap;
     use defmt::{error, info};
     use dwt_systick_monotonic::DwtSystick;
-    use fugit::{Instant, RateExtU32};
+    use fugit::RateExtU32;
     use postcard::accumulator::{CobsAccumulator, FeedResult};
     use stm32f4_app::runtime::F4Runtime;
     use stm32f4xx_hal::{otg_fs as usb, pac, prelude::*};
@@ -26,7 +27,11 @@ mod app {
 
     const SYSCLK: u32 = 84_000_000;
     const USB_EP_SIZE: usize = 256;
-    const BYTECODE_SIZE: usize = 256;
+    const BYTECODE_SIZE: usize = 512;
+    const HEAP_SIZE: usize = 1024 * 5;
+
+    #[global_allocator]
+    static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
     #[monotonic(binds = SysTick, default = true)]
     type DwtMono = DwtSystick<SYSCLK>;
@@ -45,6 +50,7 @@ mod app {
 
     #[init(local = [
         ep: [u32; USB_EP_SIZE] = [0; USB_EP_SIZE],
+        heap: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE],
         ibytecode: CobsAccumulator<BYTECODE_SIZE> = CobsAccumulator::new(),
         iusb_bus: Option<UsbBusAllocator<UsbBusType>> = None
         ])]
@@ -66,6 +72,8 @@ mod app {
 
         let usb_dm = gpioa.pa11.into_alternate();
         let mut usb_dp = gpioa.pa12.into_push_pull_output();
+
+        unsafe { ALLOCATOR.init(cx.local.heap.as_ptr() as usize, HEAP_SIZE) }
 
         // force usb reset
         usb_dp.set_low();
@@ -100,9 +108,11 @@ mod app {
         let pixel_count = 16;
         let mut vm = VM::new_empty(F4Runtime::default());
         vm.runtime_mut().init(Some(ws));
-        let executor = Executor::new(vm, pixel_count);
+        let mut executor = Executor::new(vm, pixel_count);
 
         defmt::debug!("executor size is {}", size_of_val(&executor));
+        executor.start();
+        frame::spawn().ok();
 
         let mono = DwtSystick::new(&mut dcb, dwt, systick, clocks.sysclk().to_Hz());
         (
@@ -119,10 +129,6 @@ mod app {
     #[idle(shared=[executor])]
     fn idle(mut cx: idle::Context) -> ! {
         info!("idle");
-        cx.shared.executor.lock(|executor| {
-            executor.start();
-            frame::spawn().ok();
-        });
 
         loop {
             continue;
@@ -154,6 +160,7 @@ mod app {
                     let mut window = &buf[..];
 
                     'cobs: while !window.is_empty() {
+                        defmt::trace!("... feeding, free heap {}", ALLOCATOR.free());
                         window = match cobs_buf.feed::<VM<PixelBlazeFFI, F4Runtime>>(&window) {
                             FeedResult::Consumed => break 'cobs,
                             FeedResult::OverFull(new_wind) => new_wind,
@@ -162,10 +169,19 @@ mod app {
                                 let mut next_vm = data;
                                 cx.shared.executor.lock(|executor| {
                                     if let Some(vm) = executor.take_vm() {
+                                        defmt::trace!(
+                                            "post dismember: free heap {}",
+                                            ALLOCATOR.free()
+                                        );
                                         let rt = vm.dismember();
+                                        defmt::trace!(
+                                            "post dismember: free heap {}",
+                                            ALLOCATOR.free()
+                                        );
                                         *next_vm.runtime_mut() = rt;
                                         executor.set_vm(next_vm);
                                         executor.start();
+                                        defmt::trace!("post start free heap {}", ALLOCATOR.free());
                                     }
                                 });
 
