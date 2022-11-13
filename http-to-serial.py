@@ -12,6 +12,7 @@ import logging
 class S(BaseHTTPRequestHandler):
     def _set_response(self):
         self.send_response(200)
+        # CORS support: accept everything lol
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-type", "text/plain")
         self.end_headers()

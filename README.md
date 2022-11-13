@@ -7,9 +7,9 @@ A questionable combination of JavaScript (in syntax), FORTH (in spirit) and Micr
 - Hot code reloading on embedded without having to flash a whole new binary: especially on `esp32-idf` image size and thus turnaround time can be a bit of an obstacle.
 - Port [Pixelblaze](https://www.bhencke.com/pixelblaze) to Rust.
 
-# See it in action
+## See it in action
 
-this is the web app, JavaScript editor + live updated in-browser rendering of the code, alongside hot code reload sent to a `no_std`,`no_alloc` microcontroller
+This is the live code editor (observe changes to the `hsv(...)` call in the last line) + in-browser rendering, alongside hot code reload sent to a `no_std`,`no_alloc` microcontroller.
 ![](media/showcase.gif)
 
 ## Features 
@@ -25,24 +25,27 @@ this is the web app, JavaScript editor + live updated in-browser rendering of th
 - Only a very minimal subset of JavaScript and Pixelblaze functionality is supported. You want `for` loops? Maybe in the next release…
 - Extremely unoptimized! Also, basically no prior art has been considered so it's probably full of Arrogant Rookie™ mistakes.
 - Parsing is not available on microcontrollers (so, no on-device REPL). The architecture allows implementing it, though.
-- the existing `no_std` embedded apps don't use an allocator, which means a lot of wasted memory for static buffer headroom. Allocator support is implemented but not currently used.
+- Without a heap we're forced to use `heapless` collections, and those are unfortunately wasteful for the `trenchcoat` use case.
+Therefore as of version `0.5` even the `no_std` STM32F4 app uses an allocator instead. `no_alloc` support *might* be removed at some point, but it's kept around for now.
 - The license needs to be piped through a lawyer.
 
 ## Enough talking, how do I run this?
 
-Right now the main focus lies on getting pixelblaze support to mature, so that's also what these instructions will focus on.
+Right now the main goal is getting pixelblaze support to mature, so that's also what these instructions will focus on.
 
 The general approach is:
 
 1. Pick a runtime (console/web/embedded) and compile JavaScript/Pixelblaze source to bytecode
 2. For embedded only: pick an update path - the web app uses inline compilation + HTTP to UART updates for hot code reload, but if you don't need that, you can also use the bundled `console-compiler` to compile bytecode to disk (`.tcb` for "TrenChcoat Bytecode" is a suggested file extension) and "somehow" have your firmware access it, e.g. via `include_bytes!`. If you want to update via http but your mcu is connected via UART (e.g. the bundled `stm32f4-app`), launch `http-to-serial.py /dev/YOUR-SERIAL-DEVICE` as a bridge.
-3. Spawn an `Executor`, `start()` it once and call `do_frame()` as many times as you wish to produce LED colors. On `no_std` "current time" needs to be advanced manually from some timer source (the example app reuses the frame task's scheduling interval). `Executor::exit()` is optional.
+3. Spawn an `Executor`, `start()` it once and call `do_frame()` as many times as you wish to produce LED colors. On `no_std`, "current time" needs to be advanced manually from some timer source (the example app reuses the frame task's scheduling interval). `Executor::exit()` is optional.
 
-Feature flags to pick:
+Feature flag sets to pick:
 - Desktop: `["full"]`
 - Web app/wasm: `["compiler", "log", "use-std"]`
 - Embedded: `["defmt"]` or `["defmt", "alloc"]` when you have an allocator
   - esp32 with IDF (`std` support): `["log", "use-std"]`
+
+(note: logging is entirely defunct at the moment until I fix the macros)
 
 ### WeAct STM32F4x1 aka "USB-C pill", "black pill" 
 
@@ -58,12 +61,21 @@ cd ../stm32f4-app
 cargo rrb app
 ```
 
-### Espressif C3 (and potentially S2)
-TODO, up next!
+### Espressif C3 
+
+The current iteration supports APA102/SK9822 LEDs, support for WS2812 will be added soon (the driver already resides inside the `esp32-c3-app/bsc` subdirectory).
+
+in `esp32-c3-app` there's a `config.toml.example` - copy that to `config.toml` and edit your wifi & LED settings.
+
+Build, flash and run using `cargo espflash --monitor /dev/<ESP UART HERE>`. The station (device) IP will be printed on successfully joining the wifi network. Put this IP in the web app `config.toml` list of `endpoints=`.
+
+### Espressif S2
+
+Should not be too much work to port since the C3 app uses `esp-idf`, any takers?
 
 ### Raspberry Pi Pico
 TODO, up next!
-### Browser
+### Browser/live code editor
 
 (*a cool bear spawns from an adjacent universe*)
 
@@ -74,7 +86,18 @@ TODO, up next!
 On the bright side, we don't need a separate compilation step as part of our build. 
 Because *the compiler also runs in the browser, muahahaha*
 
-See `main.rs` for more details. Currently the web app is wildly inefficient (but still plenty fast), and also the editor permanently loses cursor position. WIP.
+#### Configuration
+
+on every change to the code editor window, the web app tries to compile the source to bytecode and broadcasts it to all configured endpoints. 
+Copy `web-app/config.toml.example` to `web-app/config.toml` and set:
+- `endpoints`: list of bytecode recipients - `http://localhost:8008/` is the listen address of `http-to-serial.py` in case your target does not have its own web server. Note: if you build your own web server, it must offer at least minimal CORS support (see `http-to-serial.py` for further details)
+- `pixel_count`: number of LEDs to render in-browser
+- `initial_js_file`: initial contents of the editor window, populated via `build.rs`
+
+#### running
+
+- You might need to install "wasm stuff" for Rust first.
+- the web app is written in [Dioxus](https://dioxuslabs.com/), a react-like framework in Rust. It needs `dioxus-cli` to run.
 
 ```shell
 cargo install --git https://github.com/DioxusLabs/cli # their stable version seems broken atm
