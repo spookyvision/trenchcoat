@@ -1,5 +1,12 @@
 # Trenchcoat changelog
 
+## 0.5
+
+### 0.5.0
+
+- support `no_std` with `alloc` enabled
+- remove stale workspace and make stm32f4 app compile again, ahem
+
 ## 0.4
 
 ### 0.4.5
