@@ -4,9 +4,6 @@ name = "stm32f4-app"
 edition = "2018"
 version = "0.1.0"
 
-[workspace]
-members = ["testsuite"]
-
 [dependencies]
 defmt = "0.3"
 defmt-rtt = "0.3"
@@ -15,14 +12,14 @@ cortex-m-rtic = "1.1"
 cortex-m = "0.7"
 dwt-systick-monotonic = "1.0"
 fugit = "0.3"
-trenchcoat = { path = "..", features = ["defmt"], default-features = false}
+trenchcoat = { path = "..", features = ["defmt"], default-features = false }
 f4-peri = { git = "https://github.com/spookyvision/f4-peri.git", version = "*" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
 postcard = { version = "1.0.2", features = ["use-defmt"] }
 cordic = "0.1.5"
 micromath = { version = "2.0.0", features = ["num-traits"] }
-usb-device = "0.2" 
+usb-device = "0.2"
 usbd-serial = "0.1"
 bbqueue = { version = "0.5.1", features = ["defmt_0_3"] }
 heapless = { version = "0.7.16", features = ["defmt", "defmt-impl"] }
@@ -38,8 +35,8 @@ codegen-units = 1
 debug = 2
 debug-assertions = true # <-
 incremental = false
-opt-level = "s" # <-
-overflow-checks = true # <-
+opt-level = "s"         # <-
+overflow-checks = true  # <-
 
 # cargo test
 [profile.test]
@@ -47,8 +44,8 @@ codegen-units = 1
 debug = 2
 debug-assertions = true # <-
 incremental = false
-opt-level = "s" # <-
-overflow-checks = true # <-
+opt-level = "s"         # <-
+overflow-checks = true  # <-
 
 # cargo build/run --release
 [profile.release]
@@ -57,8 +54,8 @@ debug = 2
 debug-assertions = false # <-
 incremental = false
 lto = 'fat'
-opt-level = "s" # <-
-overflow-checks = false # <-
+opt-level = "s"          # <-
+overflow-checks = false  # <-
 
 # cargo test --release
 [profile.bench]
@@ -67,5 +64,5 @@ debug = 2
 debug-assertions = false # <-
 incremental = false
 lto = 'fat'
-opt-level = "s" # <-
-overflow-checks = false # <-
+opt-level = "s"          # <-
+overflow-checks = false  # <-

@@ -116,7 +116,6 @@ mod app {
         )
     }
 
-    // Optional idle, can be removed if not needed.
     #[idle(shared=[executor])]
     fn idle(mut cx: idle::Context) -> ! {
         info!("idle");
@@ -136,8 +135,6 @@ mod app {
 
         cx.shared.executor.lock(|executor| {
             if let Some(runtime) = executor.runtime_mut() {
-                // let now: Instant<u32, 1, SYSCLK> = monotonics::now();
-                // let now_ms = now.ticks() / (SYSCLK / 1000);
                 runtime.step_ms(frame_interval_ms as i32);
             }
             executor.do_frame();
