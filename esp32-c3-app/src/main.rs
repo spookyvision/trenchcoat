@@ -1,4 +1,3 @@
-use core::str;
 use std::{
     sync::{Arc, Mutex},
     thread::{sleep, JoinHandle},
@@ -13,10 +12,10 @@ mod runtime;
 use crate::{app_config::AppConfig, runtime::EspRuntime};
 
 pub(crate) mod bsc;
+#[cfg(feature = "ws2812")]
+pub(crate) mod ws_peri;
 use embedded_svc::httpd::{registry::Registry, Method, Response};
-use esp_idf_svc::{
-    httpd, netif::EspNetifStack, nvs::EspDefaultNvs, sysloop::EspSysLoopStack, wifi::EspWifi,
-};
+use esp_idf_svc::httpd;
 // If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
 // ivmarkov: "binstart gives you a regular Rust STD fn main()"
 use log::{info, warn};
@@ -57,7 +56,7 @@ fn httpd(config: &AppConfig) -> anyhow::Result<(httpd::Server, JoinHandle<()>)> 
     let server = httpd::ServerRegistry::new()
         .at("/")
         .post(move |mut request| {
-            info!("got new stuff!");
+            info!("got new vm!");
             if let Ok(mut ser_vm) = request.as_bytes() {
                 if let Ok(mut ex_handle) = executor.lock() {
                     let mut next_vm =

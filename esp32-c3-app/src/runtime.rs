@@ -1,7 +1,5 @@
 use std::time::Instant;
 
-#[cfg(feature = "ws2812")]
-use bsc::led::WS2812RMT;
 #[cfg(feature = "apa102")]
 use espidf_apa102::Apa;
 use log::{debug, info, warn};
@@ -11,6 +9,8 @@ use trenchcoat::{
 };
 
 use crate::app_config::AppConfig;
+#[cfg(feature = "ws2812")]
+use crate::ws_peri::Peri;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct Led {
@@ -28,10 +28,10 @@ impl Led {
 pub struct EspRuntime {
     #[cfg(feature = "apa102")]
     led_peri: Option<Apa>,
-    #[cfg(feature = "ws2812")]
-    led_peri: Option<WS2812RMT>,
+    #[cfg(all(feature = "ws2812", not(feature = "apa102")))]
+    led_peri: Option<Peri>,
     led_idx: usize,
-    leds: Option<Vec<Led>>,
+    leds: Option<Vec<RGB8>>,
     started_at: Instant,
 }
 
@@ -48,9 +48,9 @@ impl Default for EspRuntime {
 impl EspRuntime {
     pub(crate) fn init(&mut self, config: &AppConfig) {
         log::info!("RT init");
+        log::debug!("config {config:?}");
         #[cfg(feature = "ws2812")]
-        let mut led_peri =
-            WS2812RMT::new(config.data_pin).expect("could not initialize LED peripheral");
+        let mut led_peri = Peri::new(config.data_pin, config.pixel_count);
         #[cfg(feature = "apa102")]
         let mut led_peri = Apa::new(espidf_apa102::Config::new(
             config.data_pin,
@@ -60,12 +60,9 @@ impl EspRuntime {
         self.led_peri = Some(led_peri);
         let mut leds = Vec::with_capacity(config.pixel_count);
         for _ in 0..config.pixel_count {
-            leds.push(Led::default())
+            leds.push(RGB8::default())
         }
         self.leds = Some(leds);
-    }
-    pub(crate) fn leds(&self) -> Option<&Vec<Led>> {
-        self.leds.as_ref()
     }
 }
 
@@ -77,7 +74,12 @@ impl Peripherals for EspRuntime {
             let v: u8 = (v * 255).to_num();
             let rgb = hsv2rgb(h, s, v);
 
+            leds[self.led_idx] = rgb;
             if let Some(led_peri) = self.led_peri.as_mut() {
+                // TODO wart
+                #[cfg(all(feature = "ws2812", not(feature = "apa102")))]
+                led_peri.set_rgb(self.led_idx, rgb);
+                #[cfg(all(feature = "apa102", not(feature = "ws2812")))]
                 led_peri.set_pixel(self.led_idx, rgb.into());
             }
         }
@@ -89,7 +91,7 @@ impl Peripherals for EspRuntime {
 
     fn led_commit(&mut self) {
         if let Some(led_peri) = self.led_peri.as_mut() {
-            // log::info!("flush");
+            // log::trace!("flush");
             led_peri.flush();
         }
     }
