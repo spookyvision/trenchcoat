@@ -22,6 +22,7 @@ This is the live code editor (observe changes to the `hsv(...)` call in the last
   - language: the virtual machine actually executing code is a language-agnostic stack machine, there just happened to be a [JavaScript parser](https://rustdoc.swc.rs/swc_ecma_parser/) lying around. If you want to add, say, Python syntax support, you totally can! I won't! (Pull requests are welcome, though)
 
 ## Limitations
+- For a few reasons, currently nightly Rust is required.
 - Only a very minimal subset of JavaScript and Pixelblaze functionality is supported. You want `for` loops? Maybe in the next release…
 - Extremely unoptimized! Also, basically no prior art has been considered so it's probably full of Arrogant Rookie™ mistakes.
 - Parsing is not available on microcontrollers (so, no on-device REPL). The architecture allows implementing it, though.
@@ -66,13 +67,15 @@ at this point you can either send the `.tcb` data over via `cat ../res/rainbow m
 
 try increasing `HEAP_SIZE` in `src/bin/app.rs`.
 
-### Espressif C3 
+### Espressif C3
 
-The current iteration supports APA102/SK9822 LEDs, support for WS2812 will be added soon (the driver already resides inside the `esp32-c3-app/bsc` subdirectory).
+Package directory: `esp32-c3-app`
 
-in `esp32-c3-app` there's a `config.toml.example` - copy that to `config.toml` and edit your wifi & LED settings.
+You need a working Espressif native toolchain installation - more details [here](https://esp-rs.github.io/book/).
 
-Build, flash and run using `cargo espflash --monitor /dev/<ESP UART HERE>`. The station (device) IP will be printed on successfully joining the wifi network. Put this IP in the web app `config.toml` list of `endpoints=` and start the web app (or use `console-compiler` & `curl` to POST new bytecode to `http://<station ip>/`).
+copy `config.toml.example` to `config.toml` and edit your wifi & LED settings. The current firmware supports WS2812 and APA102/SK9822 LED protocols via features `ws2812` (data pin only) and `apa102` (clock and data pins) respectively. 
+
+Build, flash and run using `cargo espflash --release --monitor /dev/<ESP UART HERE> --features WS_OR_APA`. The station (device) IP will be printed on successfully joining the wifi network. Put this IP in the web app `config.toml` list of `endpoints=` and start the web app (or use `console-compiler` & `curl` to POST new bytecode to `http://<station ip>/`).
 
 ### Espressif S2
 
