@@ -311,6 +311,8 @@ where
                     Lit::JSXText(_) => todo!(),
                 };
             }
+            _ => todo!(),
+            /*
             Expr::Tpl(_) => todo!(),
             Expr::TaggedTpl(_) => todo!(),
             Expr::Arrow(_) => todo!(),
@@ -327,12 +329,12 @@ where
             Expr::TsTypeAssertion(_) => todo!(),
             Expr::TsConstAssertion(_) => todo!(),
             Expr::TsNonNull(_) => todo!(),
+            Expr::TsTypeCast(_) => todo!(),
             Expr::TsAs(_) => todo!(),
-            Expr::TsInstantiation(_) => todo!(),
-            Expr::TsSatisfaction(_) => todo!(),
             Expr::PrivateName(_) => todo!(),
             Expr::OptChain(_) => todo!(),
             Expr::Invalid(_) => todo!(),
+             */
         }
     }
 
