@@ -2,6 +2,9 @@
 
 ## 0.5
 
+### 0.5.1
+- add `ws2812` support to `esp32-c3-app`
+
 ### 0.5.0
 
 - support `no_std` with `alloc` enabled
