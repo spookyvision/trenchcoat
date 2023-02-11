@@ -9,7 +9,7 @@ A questionable combination of JavaScript (in syntax), FORTH (in spirit) and Micr
 
 ## See it in action
 
-This is the live code editor (observe changes to the `hsv(...)` call in the last line) + in-browser rendering, alongside hot code reload sent to a `no_std`,`no_alloc` microcontroller.
+This is the live editor (observe changes to the `hsv(...)` call in the last line) with in-browser compilation and rendering, alongside hot code reload sent to a `no_std`,`no_alloc` microcontroller.
 ![](media/showcase.gif)
 
 ## Features 
@@ -24,7 +24,7 @@ This is the live code editor (observe changes to the `hsv(...)` call in the last
 ## Limitations
 - For a few reasons, currently nightly Rust is required.
 - Only a very minimal subset of JavaScript and Pixelblaze functionality is supported. You want `for` loops? Maybe in the next release…
-- Extremely unoptimized! Also, basically no prior art has been considered so it's probably full of Arrogant Rookie™ mistakes.
+- Completely unoptimized! Also, basically no prior art has been considered so it's probably full of Arrogant Rookie™ mistakes.
 - Parsing is not available on microcontrollers (so, no on-device REPL). The architecture allows implementing it, though.
 - Without a heap we're forced to use `heapless` collections, and those are unfortunately wasteful for the `trenchcoat` use case.
 Therefore as of version `0.5` even the `no_std` STM32F4 app uses an allocator instead. `no_alloc` support *might* be removed at some point, but it's kept around for now.
