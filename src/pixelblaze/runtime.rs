@@ -31,11 +31,8 @@ impl Peripherals for ConsoleRuntime {
     fn led_begin(&mut self) {
         trench_debug!("LED begin");
     }
-
-    fn led_commit(&mut self) {
-        trench_debug!("LED commit");
-        trench_debug!("step time by {}ms", self.dt);
-        self.time_ms = self.time_ms.wrapping_add_signed(self.dt);
+    fn set_led_idx(&mut self, idx: usize) {
+        self.led_idx = idx;
     }
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
@@ -45,8 +42,14 @@ impl Peripherals for ConsoleRuntime {
         trench_debug!("LED[{}] HSV({},{},{})", self.led_idx, h, s, v);
     }
 
-    fn set_led_idx(&mut self, idx: usize) {
-        self.led_idx = idx;
+    fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
+        todo!();
+    }
+
+    fn led_commit(&mut self) {
+        trench_debug!("LED commit");
+        trench_debug!("step time by {}ms", self.dt);
+        self.time_ms = self.time_ms.wrapping_add_signed(self.dt);
     }
 }
 
@@ -67,5 +70,9 @@ impl Peripherals for MockRuntime {
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         unimplemented!()
+    }
+
+    fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
+        unimplemented!();
     }
 }

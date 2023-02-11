@@ -8,6 +8,8 @@ use crate::forth::{
     vm::{Cell, CellData, FFIOps, Param, VMError},
 };
 
+// TODO this sucks - any error here is not caught by the compiler
+// e.g. forget to map "rgb" => ::Rgb, boom b0rk
 #[cfg(feature = "compiler")]
 pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
     "console_log" => PixelBlazeFFI::ConsoleLog,
@@ -15,6 +17,7 @@ pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
     "time" => PixelBlazeFFI::Time,
     "wave" => PixelBlazeFFI::Wave,
     "hsv" => PixelBlazeFFI::Hsv,
+    "rgb" => PixelBlazeFFI::Rgb,
 };
 
 pub const PI: CellData = CellData::unwrapped_from_str("3.141592653589793");
@@ -28,16 +31,19 @@ pub enum PixelBlazeFFI {
     Wave,
     Abs,
     Hsv,
+    Rgb,
 }
 
 impl<RT> FFIOps<RT> for PixelBlazeFFI
 where
     RT: PixelBlazeRuntime,
 {
+    // TODO this sucks - any error here is not caught by the compiler
     fn call_info(&self) -> &[Param] {
         match self {
             PixelBlazeFFI::ConsoleLog => &[Param::DynPacked],
             PixelBlazeFFI::Hsv => &[Param::Normal, Param::Normal, Param::Normal],
+            PixelBlazeFFI::Rgb => &[Param::Normal, Param::Normal, Param::Normal],
             _ => &[Param::Normal],
         }
     }
@@ -79,6 +85,15 @@ where
 
                 // pb spec says h wraps between 0..1
                 rt.led_hsv(h.frac(), s, v);
+                res = Cell::Null;
+            }
+
+            PixelBlazeFFI::Rgb => {
+                let r = CellData::try_from(&params[2])?;
+                let g = CellData::try_from(&params[1])?;
+                let b = CellData::try_from(&params[0])?;
+
+                rt.led_rgb(r, g, b);
                 res = Cell::Null;
             }
         }

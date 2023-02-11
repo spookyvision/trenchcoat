@@ -43,6 +43,18 @@ impl Peripherals for WebRuntime {
         }
     }
 
+    fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
+        use palette::{FromColor, Hsl, Srgb};
+        if let Some(leds) = self.leds.as_mut() {
+            let rgb = Srgb::from_components((r.to_num(), g.to_num(), b.to_num()));
+            let hsv = Hsl::from_color(rgb);
+            let h = hsv.hue.to_positive_degrees() / 360.;
+            let s = hsv.saturation;
+            let l = hsv.lightness;
+            leds[self.led_idx] = Led::new(h, s, l);
+        }
+    }
+
     fn set_led_idx(&mut self, idx: usize) {
         self.led_idx = idx;
     }
