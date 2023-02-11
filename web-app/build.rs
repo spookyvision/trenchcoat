@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config: AppConfig = config_source.try_deserialize()?;
     let mut initial_js = File::open(&config.initial_js_file)?;
     let mut js_contents = String::new();
-    initial_js.read_to_string(&mut js_contents);
+    initial_js.read_to_string(&mut js_contents)?;
     config.initial_js = Some(js_contents);
 
     let config_ser = postcard::to_allocvec(&config)?;

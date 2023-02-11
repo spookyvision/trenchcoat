@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::from_utf8};
 
 use config::Config;
-use dioxus::{core::to_owned, prelude::*};
+use dioxus::prelude::*;
 use futures::{future, StreamExt};
 use gloo::timers::future::TimeoutFuture;
 use serde::Deserialize;
@@ -24,10 +24,10 @@ mod runtime;
 type WebExecutor = Executor<PixelBlazeFFI, WebRuntime>;
 
 fn main() {
-    let base_url: UseState<String>;
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
     console_error_panic_hook::set_once();
-    dioxus::web::launch(app);
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+
+    dioxus_web::launch_with_props(app, (), dioxus_web::Config::new());
 }
 
 #[allow(non_snake_case)]
@@ -129,7 +129,7 @@ fn app(cx: Scope) -> Element {
             textarea  {
                 name: "input_js",
                 rows: "20",
-                cols: "80",
+                cols: "40",
                 placeholder: "place code here",
                 oninput: move |ev| {
                     let val = ev.value.clone();

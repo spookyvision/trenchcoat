@@ -1,5 +1,5 @@
 use chrono::Utc;
-use dioxus::{core::to_owned, prelude::*};
+use dioxus::prelude::*;
 use fermi::{use_atom_state, use_read, Atom, AtomState};
 use gloo::timers::future::TimeoutFuture;
 use log::debug;
