@@ -36,5 +36,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_ser = postcard::to_allocvec(&config)?;
     fs::write(&dest_path, config_ser)?;
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../res");
     Ok(())
 }
