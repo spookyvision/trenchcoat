@@ -20,10 +20,12 @@ impl Led {
 pub struct WebRuntime {
     led_idx: usize,
     leds: Option<Vec<Led>>,
+    // TODO default gives 1970, not exactly a true "started_at"
     started_at: DateTime<Utc>,
 }
 
 impl WebRuntime {
+    // TODO this init business kinda stinks, should have a proper constructor
     pub fn init(&mut self, pixel_count: usize) {
         let mut leds = Vec::with_capacity(pixel_count);
         for _ in 0..pixel_count {
