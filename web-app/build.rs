@@ -37,5 +37,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(&dest_path, config_ser)?;
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../res");
+    println!("cargo:rerun-if-changed=config.toml");
     Ok(())
 }

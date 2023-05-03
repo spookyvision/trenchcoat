@@ -31,6 +31,7 @@ impl Peripherals for ConsoleRuntime {
     fn led_begin(&mut self) {
         trench_debug!("LED begin");
     }
+
     fn set_led_idx(&mut self, idx: usize) {
         self.led_idx = idx;
     }

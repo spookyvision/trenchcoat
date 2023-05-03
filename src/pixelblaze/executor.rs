@@ -25,6 +25,7 @@ where
     }
 
     pub fn start(&mut self) {
+        // TODO error handling
         if let Some(vm) = self.vm.as_mut() {
             vm.push(Op::PopRet.into());
             let s = "*** VM START ***\n";
@@ -42,6 +43,7 @@ where
     }
 
     pub fn exit(mut self) {
+        // TODO error handling instead of if let
         if let Some(vm) = self.vm.as_mut() {
             vm.push(Op::PopRet.into());
             let s = "*** DÖNE! ***";
@@ -55,7 +57,24 @@ where
         }
     }
 
+    pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
+        // TODO error handling instead of if let
+        if let Some(vm) = self.vm.as_mut() {
+            vm.set_var(name, val);
+        }
+    }
+
+    pub fn on_slider(&mut self, name: impl AsRef<str>, val: f32) {
+        // TODO error handling instead of if let
+        if let Some(vm) = self.vm.as_mut() {
+            vm.push(val.into());
+            vm.call_fn(name);
+            vm.pop_unchecked(); // toss bogus return value
+        }
+    }
+
     pub fn do_frame(&mut self) {
+        // TODO error handling instead of if let
         if let Some(vm) = self.vm.as_mut() {
             let now = vm.runtime_mut().time_millis();
             let delta = now - self.last_millis;
@@ -63,7 +82,7 @@ where
 
             vm.push(delta.into());
             vm.call_fn("beforeRender");
-            vm.pop_unchecked(); // toss away implicitly returned null
+            vm.pop_unchecked(); // toss bogus return value
 
             vm.runtime_mut().led_begin();
             for pixel_idx in 0..self.pixel_count {

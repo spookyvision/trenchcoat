@@ -587,6 +587,10 @@ where
     pub fn runtime(&self) -> &RT {
         &self.runtime
     }
+
+    pub fn funcs(&self) -> &DefaultFuncDef<FFI> {
+        &self.funcs
+    }
 }
 
 #[cfg(test)]
