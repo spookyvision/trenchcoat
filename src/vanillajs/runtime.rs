@@ -45,6 +45,8 @@ where
 
     fn call_info(&self) -> &[Param] {
         match self {
+            // TODO this assumes strings; we could *probably* wrap stuff without too much effort
+            // so numbers & variables would be possible as well...
             VanillaJSFFI::ConsoleLog => &[Param::DynPacked],
             VanillaJSFFI::MathPow => &[Param::Normal, Param::Normal],
         }
