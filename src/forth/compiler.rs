@@ -18,6 +18,7 @@ use super::{
     vm::{types::VMVec, Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM},
 };
 use crate::{
+    forth::util::pack,
     pixelblaze::{self, runtime::ConsoleRuntime},
     vanillajs,
 };
@@ -283,23 +284,10 @@ where
                 trace!("lit! {lit:?}");
                 match lit {
                     Lit::Str(s) => {
-                        // TODO dedup <> `VM::push_str`
                         let s = &s.value;
                         let bytes = s.as_bytes();
-                        let valid_bytes_len = bytes.len();
-
-                        // TODO use existing util func
-                        // let chonky_boytes = bytes.chunks_exact(4);
-                        let chonky_boytes = bytes.chunks(4);
-
-                        // let remainder = chonky_boytes.remainder();
-                        let chonky_boytes = chonky_boytes.map(|boi| {
-                            let val = CellData::from_le_bytes(<[u8; 4]>::try_from(boi).unwrap());
-                            Cell::Val(val)
-                        });
-                        self.stack.extend(chonky_boytes);
-                        self.stack
-                            .push(Cell::Val(CellData::from_num(valid_bytes_len)))
+                        let packed = pack(&bytes);
+                        self.stack.extend(packed);
                     }
                     Lit::Bool(b) => self
                         .stack
