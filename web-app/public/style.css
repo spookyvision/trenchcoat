@@ -25,10 +25,10 @@ div.square-container {
 
 div.square {
     display: inline-block;
-    width: 8px;
-    height: 20px;
-    border: 1px solid black;
-    margin: 1px;
+    width: 4px;
+    height: 10px;
+    /* border: 1px solid black; */
+    /* margin: 1px; */
 }
 
 div.segment {
