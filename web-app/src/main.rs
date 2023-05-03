@@ -68,17 +68,12 @@ struct AppConfig {
     initial_js: Option<String>,
 }
 
-fn app(cx: Scope) -> Element {
-    log::info!("start");
-    log::info!("dstart");
-    let config: AppConfig =
-        postcard::from_bytes(include_bytes!(concat!(env!("OUT_DIR"), "/config.ser"))).unwrap();
-
+#[allow(non_snake_case)]
+#[inline_props]
+fn RenderExecutor(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
     let pixel_count = config.pixel_count;
-
-    let initial_js = config.initial_js.unwrap();
-
     // TODO add manual flush?
+    // TODO remove im collections; proper usage: see embedded ui
     let slider_vars = use_state(&cx, SliderVars::default);
 
     let ui_items = use_state(cx, || {
@@ -87,7 +82,7 @@ fn app(cx: Scope) -> Element {
     });
 
     let executor: &UseRef<Executor<PixelBlazeFFI, WebRuntime>> = use_ref(&cx, || {
-        let mut ser = compile(initial_js.as_str(), Flavor::Pixelblaze).unwrap();
+        let mut ser = compile(js.as_str(), Flavor::Pixelblaze).unwrap();
         let mut vm: VM<PixelBlazeFFI, WebRuntime> = postcard::from_bytes_cobs(&mut ser).unwrap();
         vm.runtime_mut().init(pixel_count);
         let mut executor = Executor::new(vm, pixel_count);
@@ -95,14 +90,19 @@ fn app(cx: Scope) -> Element {
         executor.start();
         executor
     });
-    let js = use_state(&cx, || initial_js.clone());
 
-    let ex2 = executor.clone();
-    let ui_items2 = ui_items.clone();
-    let update_executor = use_coroutine(
-        &cx,
-        |mut rx: UnboundedReceiver<RecompileState>| async move {
-            let executor = ex2;
+    cx.spawn({
+        to_owned![executor];
+        async move {
+            TimeoutFuture::new(100).await;
+            executor.write().do_frame();
+        }
+    });
+
+    let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<RecompileState>| {
+        to_owned![executor, ui_items];
+
+        async move {
             while let Some(mut recompile_state) = rx.next().await {
                 debug!("refresh executor");
 
@@ -142,7 +142,7 @@ fn app(cx: Scope) -> Element {
                     }
                 }
 
-                ui_items2.set(next_ui_items);
+                ui_items.set(next_ui_items);
 
                 let vm = executor.write_silent().take_vm().unwrap();
                 let rt = vm.dismember();
@@ -154,9 +154,10 @@ fn app(cx: Scope) -> Element {
                     executor.with_mut(|ex| ex.on_slider("slider".to_string() + k, *v));
                 }
             }
-        },
-    )
+        }
+    })
     .to_owned();
+    let endpoints = config.endpoints.clone();
 
     let _code_updated = use_future(&cx, (js, slider_vars), |(js, slider_vars)| async move {
         if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
@@ -164,10 +165,10 @@ fn app(cx: Scope) -> Element {
                 vm_bytes: ser.clone(),
                 slider_vars: slider_vars.get().clone(),
             };
-            update_executor.send(state);
+            recompile.send(state);
 
             let mut futs = vec![];
-            for url in config.endpoints.iter().cloned() {
+            for url in endpoints.iter().cloned() {
                 let ser = ser.clone();
                 futs.push(async move {
                     debug!("updating endpoint at {url}");
@@ -181,13 +182,34 @@ fn app(cx: Scope) -> Element {
         }
     });
 
-    cx.spawn({
-        to_owned![executor];
-        async move {
-            TimeoutFuture::new(100).await;
-            executor.write().do_frame();
-        }
-    });
+    cx.render(rsx! {
+
+        Pixels { executor: executor.clone() }
+
+        ui_items.iter().map(|item| match item {
+            RuntimeUi::Slider(name) => rsx!(
+                UiSlider {
+                    key: "{name}",
+                    name: name.clone(),
+                    vars: slider_vars.clone(),
+                    executor: executor.clone() }
+            ),
+            _ => rsx!{"TODO"}
+
+        })
+    })
+}
+
+fn app(cx: Scope) -> Element {
+    log::info!("start");
+
+    let config: AppConfig =
+        postcard::from_bytes(include_bytes!(concat!(env!("OUT_DIR"), "/config.ser"))).unwrap();
+
+    // TODO why is this an `Option` again?
+    let initial_js = config.initial_js.clone().unwrap();
+
+    let js = use_state(&cx, || initial_js.clone());
 
     cx.render(rsx! {
         h1 { "Welcome to Trenchcoat!" }
@@ -204,23 +226,9 @@ fn app(cx: Scope) -> Element {
 
                 "{initial_js}"
             }
-
-            hr {}
-
-            ui_items.iter().map(|item| match item {
-                RuntimeUi::Slider(name) => rsx!(
-                    UiSlider {
-                        key: "{name}",
-                        name: name.clone(),
-                        vars: slider_vars.clone(),
-                        executor: executor.clone() }
-                ),
-                _ => rsx!{"TODO"}
-
-            })
-
-
         }
-        Pixels { executor: executor.clone() }
+        hr {}
+        RenderExecutor { js: js.clone(), config: config }
+
     })
 }
