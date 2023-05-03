@@ -48,7 +48,7 @@ impl Peripherals for WebRuntime {
         if let Some(leds) = self.leds.as_mut() {
             let rgb = Srgb::from_components((r.to_num(), g.to_num(), b.to_num()));
             let hsv = Hsl::from_color(rgb);
-            let h = hsv.hue.to_positive_degrees() / 360.;
+            let h = hsv.hue.into_positive_degrees() / 360.;
             let s = hsv.saturation;
             let l = hsv.lightness;
             leds[self.led_idx] = Led::new(h, s, l);
