@@ -36,10 +36,27 @@ impl WebRuntime {
     }
 }
 
+fn hsv2hsl(h: f32, mut s: f32, v: f32) -> (f32, f32, f32) {
+    let l = (2. - s) * v / 2.;
+
+    if (l != 0.) {
+        if (l == 1.) {
+            s = 0.;
+        } else if (l < 0.5) {
+            s = s * v / (l * 2.);
+        } else {
+            s = s * v / (2. - l * 2.);
+        }
+    }
+
+    (h, s, l)
+}
 impl Peripherals for WebRuntime {
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         if let Some(leds) = self.leds.as_mut() {
-            leds[self.led_idx] = Led::new(h.to_num(), s.to_num(), v.to_num());
+            // CSS uses HSL -> convert HSV to HSL
+            let (h, s, l) = hsv2hsl(h.to_num(), s.to_num(), v.to_num());
+            leds[self.led_idx] = Led::new(h, s, l);
         }
     }
 
