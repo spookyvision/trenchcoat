@@ -1,10 +1,13 @@
-use std::ptr::{null, null_mut};
+use std::{
+    ffi::c_void,
+    ptr::{null, null_mut},
+};
 
 use esp_idf_sys::{
-    c_types::c_void, esp, rmt_config, rmt_config_t, rmt_config_t__bindgen_ty_1, rmt_driver_install,
+    esp, rmt_config, rmt_config_t, rmt_config_t__bindgen_ty_1, rmt_driver_install,
     rmt_get_counter_clock, rmt_item32_t, rmt_item32_t__bindgen_ty_1,
     rmt_item32_t__bindgen_ty_1__bindgen_ty_1, rmt_mode_t_RMT_MODE_TX, rmt_translator_init,
-    rmt_tx_config_t, rmt_wait_tx_done, rmt_write_sample, size_t, u_int8_t,
+    rmt_tx_config_t, rmt_wait_tx_done, rmt_write_sample, u_int8_t,
 };
 pub use rgb::RGB8;
 
@@ -28,10 +31,10 @@ static mut WS_CONFIG: Option<Ws2812Config> = None;
 unsafe extern "C" fn ws2812_to_rmt(
     src: *const c_void,
     dest: *mut rmt_item32_t,
-    src_size: size_t,
-    wanted_num: size_t,
-    translated_size: *mut size_t,
-    item_num: *mut size_t,
+    src_size: usize,
+    wanted_num: usize,
+    translated_size: *mut usize,
+    item_num: *mut usize,
 ) {
     if src == null() || dest == null_mut() {
         *translated_size = 0;
@@ -64,7 +67,7 @@ unsafe extern "C" fn ws2812_to_rmt(
         },
     };
 
-    let mut size: size_t = 0;
+    let mut size: usize = 0;
     let mut num = 0;
 
     let mut psrc = src as *const u_int8_t;

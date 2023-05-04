@@ -4,6 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use esp_idf_hal::prelude::Peripherals;
 use trenchcoat::{
     forth::vm::VM,
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI},
@@ -16,8 +17,6 @@ pub(crate) mod bsc;
 pub(crate) mod ws_peri;
 use embedded_svc::httpd::{registry::Registry, Method, Response};
 use esp_idf_svc::httpd;
-// If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
-// ivmarkov: "binstart gives you a regular Rust STD fn main()"
 use log::{info, warn};
 
 pub(crate) mod app_config;
@@ -27,10 +26,12 @@ fn main() -> anyhow::Result<()> {
     esp_idf_svc::log::EspLogger::initialize_default();
     info!("trenchcoat!");
 
+    let peripherals = Peripherals::take().unwrap();
+
     let sys_start = Instant::now();
     let config = AppConfig::new();
-    let _wifi = bsc::wifi::wifi(&config.wifi_ssid, &config.wifi_psk)?;
-
+    let _wifi = bsc::wifi::wifi(&config.wifi_ssid, &config.wifi_psk, peripherals.modem)?;
+    info!("starting web server");
     let (_httpd, _vm_thread) = httpd(&config)?;
 
     loop {
