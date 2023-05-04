@@ -50,9 +50,9 @@ impl EspRuntime {
         log::info!("RT init");
         log::debug!("config {config:?}");
         #[cfg(feature = "ws2812")]
-        let mut led_peri = Peri::new(config.data_pin, config.pixel_count);
+        let led_peri = Peri::new(config.data_pin, config.pixel_count);
         #[cfg(feature = "apa102")]
-        let mut led_peri = Apa::new(espidf_apa102::Config::new(
+        let led_peri = Apa::new(espidf_apa102::Config::new(
             config.data_pin,
             config.clock_pin.unwrap(),
         ));
@@ -67,6 +67,19 @@ impl EspRuntime {
 }
 
 impl Peripherals for EspRuntime {
+    fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
+        if let Some(leds) = self.leds.as_mut() {
+            let rgb = rgb::RGB8::new(r.to_num(), g.to_num(), b.to_num());
+            leds[self.led_idx] = rgb;
+            if let Some(led_peri) = self.led_peri.as_mut() {
+                // TODO wart
+                #[cfg(all(feature = "ws2812", not(feature = "apa102")))]
+                led_peri.set_rgb(self.led_idx, rgb);
+                #[cfg(all(feature = "apa102", not(feature = "ws2812")))]
+                led_peri.set_pixel(self.led_idx, rgb.into());
+            }
+        }
+    }
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
         if let Some(leds) = self.leds.as_mut() {
             let h: u8 = (h * 255).to_num();
