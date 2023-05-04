@@ -5,14 +5,25 @@ use trenchcoat::{
     forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
 };
 
-#[derive(Default)]
+pub const NUM_LEDS: usize = 48;
+
 pub struct F4Runtime {
     led_idx: usize,
     time: u32,
-    leds: [RGB8; 16],
+    leds: [RGB8; NUM_LEDS],
     ws: Option<WS>,
 }
 
+impl Default for F4Runtime {
+    fn default() -> Self {
+        Self {
+            led_idx: Default::default(),
+            time: Default::default(),
+            leds: [RGB8::new(0, 0, 0); NUM_LEDS],
+            ws: Default::default(),
+        }
+    }
+}
 impl PartialEq for F4Runtime {
     fn eq(&self, other: &Self) -> bool {
         self.led_idx == other.led_idx && self.time == other.time
@@ -26,7 +37,7 @@ impl F4Runtime {
         Self {
             led_idx: 0,
             time: 0,
-            leds: Default::default(),
+            leds: [RGB8::new(0, 0, 0); NUM_LEDS],
             ws: Some(ws),
         }
     }
@@ -43,7 +54,7 @@ impl F4Runtime {
         self.ws = ws;
     }
 
-    pub fn leds_mut(&mut self) -> &mut [RGB8; 16] {
+    pub fn leds_mut(&mut self) -> &mut [RGB8; NUM_LEDS] {
         &mut self.leds
     }
 }
@@ -51,6 +62,10 @@ impl F4Runtime {
 impl Peripherals for F4Runtime {
     fn set_led_idx(&mut self, idx: usize) {
         self.led_idx = idx;
+    }
+
+    fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
+        self.leds[self.led_idx] = RGB8::new(r.to_num(), g.to_num(), b.to_num());
     }
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {

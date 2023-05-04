@@ -11,11 +11,11 @@ mod app {
     use core::mem::{size_of_val, MaybeUninit};
 
     use alloc_cortex_m::CortexMHeap;
-    use defmt::{error, info};
+    use defmt::{debug, info};
     use dwt_systick_monotonic::DwtSystick;
     use fugit::RateExtU32;
     use postcard::accumulator::{CobsAccumulator, FeedResult};
-    use stm32f4_app::runtime::F4Runtime;
+    use stm32f4_app::runtime::{F4Runtime, NUM_LEDS};
     use stm32f4xx_hal::{otg_fs as usb, pac, prelude::*};
     use trenchcoat::{
         forth::vm::VM,
@@ -25,10 +25,10 @@ mod app {
     use usb_device::{bus::UsbBusAllocator, prelude::*};
     use usbd_serial::SerialPort;
 
-    const SYSCLK: u32 = 84_000_000;
-    const USB_EP_SIZE: usize = 256;
+    const SYSCLK: u32 = 96_000_000;
+    const USB_EP_SIZE: usize = 1024;
     const BYTECODE_SIZE: usize = 512;
-    const HEAP_SIZE: usize = 1024 * 5;
+    const HEAP_SIZE: usize = 1024 * 10;
 
     #[global_allocator]
     static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -61,7 +61,13 @@ mod app {
         cp.DWT.enable_cycle_counter();
 
         let rcc = device.RCC.constrain();
-        let clocks = rcc.cfgr.use_hse(25.MHz()).sysclk(SYSCLK.Hz()).freeze();
+        info!("clocks...");
+        let clocks = rcc
+            .cfgr
+            .use_hse(25.MHz())
+            .sysclk(SYSCLK.Hz())
+            .require_pll48clk()
+            .freeze();
 
         let mut dcb = cp.DCB;
         let dwt = cp.DWT;
@@ -73,8 +79,9 @@ mod app {
         let usb_dm = gpioa.pa11.into_alternate();
         let mut usb_dp = gpioa.pa12.into_push_pull_output();
 
+        debug!("allocator...");
         unsafe { ALLOCATOR.init(cx.local.heap.as_ptr() as usize, HEAP_SIZE) }
-
+        info!("usb reset...");
         // force usb reset
         usb_dp.set_low();
         cortex_m::asm::delay(clocks.sysclk().to_kHz());
@@ -92,9 +99,12 @@ mod app {
 
         let ep = cx.local.ep;
 
+        debug!("usb...");
         let usb_bus = cx.local.iusb_bus.insert(UsbBus::new(usb, ep));
 
+        debug!("serial...");
         let serial = SerialPort::new(usb_bus);
+        debug!("usb_dev...");
         let usb_dev = UsbDeviceBuilder::new(usb_bus, UsbVidPid(0x16c0, 0x27dd))
             .manufacturer("Medusa Entertainment")
             .product("PB")
@@ -102,15 +112,19 @@ mod app {
             .device_class(usbd_serial::USB_CLASS_CDC)
             .build();
 
+        debug!("spi...");
         let spi = f4_peri::ws2812::spi(device.SPI2, gpiob.pb15.into_alternate(), &clocks);
         let ws = ws2812_spi::Ws2812::new(spi);
 
-        let pixel_count = 16;
+        let pixel_count = NUM_LEDS;
+        debug!("vm...");
         let mut vm = VM::new_empty(F4Runtime::default());
         vm.runtime_mut().init(Some(ws));
+        debug!("executor...");
         let mut executor = Executor::new(vm, pixel_count);
+        debug!("pixel count: {}", executor.pixel_count());
 
-        defmt::debug!("executor size is {}", size_of_val(&executor));
+        debug!("executor size is {}", size_of_val(&executor));
         executor.start();
         frame::spawn().ok();
 
@@ -137,11 +151,11 @@ mod app {
 
     #[task(shared=[executor])]
     fn frame(mut cx: frame::Context) {
-        let frame_interval_ms = 30u32;
+        let frame_interval_ms = 50u32;
 
         cx.shared.executor.lock(|executor| {
             if let Some(runtime) = executor.runtime_mut() {
-                runtime.step_ms(frame_interval_ms as i32);
+                runtime.step_ms((frame_interval_ms) as i32);
             }
             executor.do_frame();
         });
