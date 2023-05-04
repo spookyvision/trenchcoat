@@ -1,0 +1,2 @@
+#!/bin/sh
+cargo espflash --partition-table partition.csv --monitor --release --features apa102 /dev/cu.usbmodem121101 
