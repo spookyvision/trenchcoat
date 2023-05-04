@@ -76,7 +76,7 @@ mod app {
         let gpiob = device.GPIOB.split();
         let gpioa = device.GPIOA.split();
 
-        let usb_dm = gpioa.pa11.into_alternate();
+        let usb_dm = gpioa.pa11;
         let mut usb_dp = gpioa.pa12.into_push_pull_output();
 
         debug!("allocator...");
@@ -86,14 +86,12 @@ mod app {
         usb_dp.set_low();
         cortex_m::asm::delay(clocks.sysclk().to_kHz());
 
-        let usb_dp = usb_dp.into_alternate();
-
         let usb = USB {
             usb_global: device.OTG_FS_GLOBAL,
             usb_device: device.OTG_FS_DEVICE,
             usb_pwrclk: device.OTG_FS_PWRCLK,
-            pin_dm: usb_dm,
-            pin_dp: usb_dp,
+            pin_dm: usb_dm.into(),
+            pin_dp: usb_dp.into(),
             hclk: clocks.hclk(),
         };
 

@@ -16,7 +16,7 @@ trenchcoat = { path = "..", features = [
     "defmt",
     "alloc",
 ], default-features = false }
-f4-peri = { git = "https://github.com/spookyvision/f4-peri.git", version = "*" }
+f4-peri = { git = "https://github.com/spookyvision/f4-peri.git" }
 smart-leds = "0.3.0"
 ws2812-spi = "0.4.0"
 postcard = { version = "1.0.2", features = ["use-defmt"] }
