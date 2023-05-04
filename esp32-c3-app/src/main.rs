@@ -1,9 +1,10 @@
 use std::{
     sync::{Arc, Mutex},
-    thread::{sleep, JoinHandle},
-    time::{Duration, Instant},
+    thread::sleep,
+    time::Duration,
 };
 
+use embedded_svc::io::Write;
 use esp_idf_hal::prelude::Peripherals;
 use trenchcoat::{
     forth::vm::VM,
@@ -15,9 +16,13 @@ use crate::{app_config::AppConfig, runtime::EspRuntime};
 pub(crate) mod bsc;
 #[cfg(feature = "ws2812")]
 pub(crate) mod ws_peri;
-use embedded_svc::httpd::{registry::Registry, Method, Response};
-use esp_idf_svc::httpd;
-use log::{info, warn};
+
+use embedded_svc::{
+    http::{server::Method, Headers},
+    io::Read,
+};
+use esp_idf_svc::http::server::EspHttpServer;
+use log::info;
 
 pub(crate) mod app_config;
 
@@ -28,63 +33,71 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take().unwrap();
 
-    let sys_start = Instant::now();
     let config = AppConfig::new();
     let _wifi = bsc::wifi::wifi(&config.wifi_ssid, &config.wifi_psk, peripherals.modem)?;
-    info!("starting web server");
-    let (_httpd, _vm_thread) = httpd(&config)?;
 
-    loop {
-        sleep(Duration::from_millis(10));
-    }
-}
+    info!("starting VM");
 
-fn httpd(config: &AppConfig) -> anyhow::Result<(httpd::Server, JoinHandle<()>)> {
     let mut vm = VM::new_empty(EspRuntime::default());
-    vm.runtime_mut().init(config);
+    vm.runtime_mut().init(&config);
     let mut executor = Executor::new(vm, config.pixel_count);
     executor.start();
     let executor = Arc::new(Mutex::new(executor));
 
     let frame_ex = executor.clone();
-    let vm_thread_handle = std::thread::spawn(move || loop {
+
+    info!("starting web server");
+    let _httpd = httpd(executor.clone())?;
+
+    loop {
         if let Ok(mut executor) = frame_ex.lock() {
             executor.do_frame();
         }
-        sleep(Duration::from_millis(50));
-    });
+        sleep(Duration::from_millis(10));
+    }
+}
 
-    let server = httpd::ServerRegistry::new()
-        .at("/")
-        .post(move |mut request| {
-            info!("got new vm!");
-            if let Ok(mut ser_vm) = request.as_bytes() {
+const CORS_HEADERS: [(&str, &str); 2] = [
+    ("Access-Control-Allow-Origin", "*"),
+    ("Content-type", "text/plain"),
+];
+
+fn httpd(
+    executor: Arc<Mutex<Executor<PixelBlazeFFI, EspRuntime>>>,
+) -> anyhow::Result<EspHttpServer> {
+    let mut server = EspHttpServer::new(&Default::default())?;
+
+    server
+        .fn_handler("/", Method::Post, move |mut request| {
+            if let Some(len) = request.header("Content-Length") {
+                let len: usize = len.parse()?;
+                info!("body: {len} bytes");
+                let mut body: Vec<u8> = Vec::with_capacity(len);
+                body.resize(len, 0);
+                request.read(&mut body)?;
                 if let Ok(mut ex_handle) = executor.lock() {
+                    info!("loading bytecode");
                     let mut next_vm =
-                        postcard::from_bytes_cobs::<VM<PixelBlazeFFI, EspRuntime>>(&mut ser_vm)?;
+                        postcard::from_bytes_cobs::<VM<PixelBlazeFFI, EspRuntime>>(&mut body)?;
+                    info!("updating VM");
                     let runtime = ex_handle.take_vm().unwrap().dismember();
                     *next_vm.runtime_mut() = runtime;
                     ex_handle.set_vm(next_vm);
-                    info!("restarting vm!");
+                    info!("restarting VM");
                     ex_handle.start();
                 }
             }
-            let response = Response::ok();
-            response
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-type", "text/plain")
-                .into()
+            request
+                .into_response(200, Some("OK"), &CORS_HEADERS)?
+                .write_all("ÖK".as_bytes())?;
+            Ok(())
         })?
-        .at("/")
-        .handler(Method::Options, |_request| {
-            let response = Response::ok();
-            response
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-type", "text/plain")
-                .into()
+        .fn_handler("/", Method::Options, |request| {
+            request
+                .into_response(200, Some("OK"), &CORS_HEADERS)?
+                .write_all(b"")?;
+            Ok(())
         })?;
 
-    let server = server.start(&Default::default());
-
-    server.map(|server| (server, vm_thread_handle))
+    Ok(server)
 }

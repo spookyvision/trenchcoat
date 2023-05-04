@@ -58,6 +58,7 @@ impl EspRuntime {
         ));
 
         self.led_peri = Some(led_peri);
+        log::info!("LED peripheral ok");
         let mut leds = Vec::with_capacity(config.pixel_count);
         for _ in 0..config.pixel_count {
             leds.push(RGB8::default())

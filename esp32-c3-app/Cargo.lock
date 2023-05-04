@@ -624,6 +624,7 @@ dependencies = [
  "defmt",
  "embedded-io",
  "enumset",
+ "futures",
  "heapless",
  "log",
  "no-std-net",
