@@ -49,7 +49,53 @@ fn main() {
 
 #[allow(non_snake_case)]
 #[inline_props]
-fn Pixels(cx: Scope, bytecode: UseState<Vec<u8>>, pixel_count: usize) -> Element {
+fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
+    let pixel_count = config.pixel_count;
+    // TODO add manual flush?
+    // TODO remove im collections; proper usage: see embedded ui
+    let slider_vars = use_state(&cx, SliderVars::default);
+
+    let bytecode = use_state(&cx, || compile(&js, Flavor::Pixelblaze).unwrap());
+    let ui_items = use_ref(cx, || {
+        let res: Vec<RuntimeUi> = vec![];
+        res
+    });
+
+    let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<Vec<u8>>| {
+        to_owned![ui_items, js, bytecode];
+
+        async move {
+            while let Some(mut vm_ser) = rx.next().await {
+                debug!("refresh executor");
+                bytecode.set(vm_ser.clone());
+            }
+        }
+    })
+    .to_owned();
+    let endpoints = config.endpoints.clone();
+
+    let _vars_updates = use_future(&cx, slider_vars, |slider_vars| async move {
+        debug!("slider vars updated");
+    });
+    let _code_updated = use_future(&cx, js, |js| async move {
+        if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
+            recompile.send(ser.clone());
+
+            let mut futs = vec![];
+            for url in endpoints.iter().cloned() {
+                let ser = ser.clone();
+                futs.push(async move {
+                    debug!("updating endpoint at {url}");
+                    surf::post(url)
+                        .content_type("multipart/form-data")
+                        .body_bytes(&ser)
+                        .await;
+                });
+            }
+            future::join_all(futs).await;
+        }
+    });
+
     let canvas_context: &UseState<Option<CanvasRenderingContext2d>> = use_state(&cx, || None);
 
     let render = use_future(
@@ -135,61 +181,9 @@ fn Pixels(cx: Scope, bytecode: UseState<Vec<u8>>, pixel_count: usize) -> Element
         }
     });
 
-    cx.render(rsx!(canvas { id: "pixels" }))
-}
-
-#[allow(non_snake_case)]
-#[inline_props]
-fn RenderExecutor(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
-    let pixel_count = config.pixel_count;
-    // TODO add manual flush?
-    // TODO remove im collections; proper usage: see embedded ui
-    let slider_vars = use_state(&cx, SliderVars::default);
-
-    let bytecode = use_state(&cx, || compile(&js, Flavor::Pixelblaze).unwrap());
-    let ui_items = use_ref(cx, || {
-        let res: Vec<RuntimeUi> = vec![];
-        res
-    });
-
-    let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<Vec<u8>>| {
-        to_owned![ui_items, js, bytecode];
-
-        async move {
-            while let Some(mut vm_ser) = rx.next().await {
-                debug!("refresh executor");
-                bytecode.set(vm_ser.clone());
-            }
-        }
-    })
-    .to_owned();
-    let endpoints = config.endpoints.clone();
-
-    let _vars_updates = use_future(&cx, slider_vars, |slider_vars| async move {
-        debug!("slider vars updated");
-    });
-    let _code_updated = use_future(&cx, js, |js| async move {
-        if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
-            recompile.send(ser.clone());
-
-            let mut futs = vec![];
-            for url in endpoints.iter().cloned() {
-                let ser = ser.clone();
-                futs.push(async move {
-                    debug!("updating endpoint at {url}");
-                    surf::post(url)
-                        .content_type("multipart/form-data")
-                        .body_bytes(&ser)
-                        .await;
-                });
-            }
-            future::join_all(futs).await;
-        }
-    });
-
     cx.render(rsx! {
 
-        Pixels { bytecode: bytecode.clone(), pixel_count: pixel_count }
+        canvas { id: "pixels" }
 
         ui_items.read().iter().map(|item| match item {
             RuntimeUi::Slider(name) => rsx!(
@@ -233,7 +227,7 @@ fn app(cx: Scope) -> Element {
             }
         }
         hr {}
-        RenderExecutor { js: js.clone(), config: config }
+        CodeUpdateLoop { js: js.clone(), config: config }
 
     })
 }
