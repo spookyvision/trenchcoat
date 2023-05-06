@@ -85,6 +85,9 @@ where
             vm.pop_unchecked(); // toss bogus return value
 
             vm.runtime_mut().led_begin();
+            // TODO performance:
+            // - function call lookup can be memoized
+            // - entire block can be moved inside vm maybe?
             for pixel_idx in 0..self.pixel_count {
                 vm.runtime_mut().set_led_idx(pixel_idx);
                 vm.push(pixel_idx.into());
