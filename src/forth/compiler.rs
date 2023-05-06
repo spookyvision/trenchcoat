@@ -165,7 +165,23 @@ where
             Expr::Array(_) => todo!(),
             Expr::Object(_) => todo!(),
             Expr::Fn(_) => todo!(),
-            Expr::Unary(_) => todo!(),
+            Expr::Unary(unary_expr) => {
+                match unary_expr.op {
+                    UnaryOp::Minus => {
+                        self.eval_expr(&unary_expr.arg);
+                        self.stack.push((-1).into());
+                        self.stack.push(Cell::Op(Op::Mul));
+                    }
+                    UnaryOp::Plus => {
+                        // no-op ... right? RIGHT?
+                    }
+                    UnaryOp::Bang => todo!(),
+                    UnaryOp::Tilde => todo!(),
+                    UnaryOp::TypeOf => todo!(),
+                    UnaryOp::Void => todo!(),
+                    UnaryOp::Delete => todo!(),
+                }
+            }
             Expr::Update(_) => todo!(),
             Expr::Bin(bin_expr) => {
                 self.eval_expr(&bin_expr.left);
