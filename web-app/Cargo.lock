@@ -3565,7 +3565,9 @@ dependencies = [
  "serde",
  "surf",
  "trenchcoat",
+ "wasm-bindgen",
  "wasm-logger",
+ "web-sys",
 ]
 
 [[package]]

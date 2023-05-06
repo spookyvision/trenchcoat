@@ -2,8 +2,8 @@ use std::{collections::HashMap, str::from_utf8};
 
 use config::Config;
 use dioxus::prelude::*;
-use futures::{future, StreamExt};
-use gloo::timers::future::TimeoutFuture;
+use futures::{channel::oneshot, future, StreamExt};
+use gloo::{timers::future::TimeoutFuture, utils::window};
 use itertools::Itertools;
 use log::debug;
 use render::{RuntimeUi, UiSlider};
@@ -15,11 +15,10 @@ use trenchcoat::{
     },
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
 };
+use wasm_bindgen::prelude::*;
+use web_sys::CanvasRenderingContext2d;
 
-use crate::{
-    render::LedWidget,
-    runtime::{Led, WebRuntime},
-};
+use crate::runtime::WebRuntime;
 
 mod render;
 mod runtime;
@@ -32,6 +31,14 @@ struct RecompileState {
 
 pub(crate) type SliderVars = im_rc::HashMap<String, f32>;
 
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+struct AppConfig {
+    endpoints: Vec<String>,
+    pixel_count: usize,
+    initial_js_file: String,
+    initial_js: Option<String>,
+}
+
 fn main() {
     console_error_panic_hook::set_once();
     debug!("?");
@@ -42,30 +49,93 @@ fn main() {
 
 #[allow(non_snake_case)]
 #[inline_props]
-fn Pixels(cx: Scope, executor: UseRef<WebExecutor>) -> Element {
-    let executor = executor.read();
-    let runtime = executor.runtime().unwrap();
-    let leds = runtime.leds().unwrap();
-    let inner = leds.iter().cloned().enumerate().map(|(led_id, led)| {
-        rsx! {
-            div {
-                class: "square-container",
-                key: "led-{led_id}",
-                LedWidget { led: led }
+fn Pixels(cx: Scope, bytecode: UseState<Vec<u8>>, pixel_count: usize) -> Element {
+    let canvas_context: &UseState<Option<CanvasRenderingContext2d>> = use_state(&cx, || None);
+
+    let render = use_future(
+        cx,
+        (bytecode, canvas_context),
+        |(bytecode, canvas_context)| {
+            to_owned![pixel_count];
+            async move {
+                if let Some(context) = canvas_context.get() {
+                    let mut bytecode = bytecode.get().clone();
+
+                    let mut vm: VM<PixelBlazeFFI, WebRuntime> =
+                        postcard::from_bytes_cobs(&mut bytecode).unwrap();
+                    vm.runtime_mut().init(pixel_count);
+
+                    let mut next_ui_items = vec![];
+                    for (func_name, _) in vm.funcs().iter().sorted_by(|(k, _), (k2, _)| k.cmp(k2)) {
+                        if func_name.starts_with("slider") {
+                            if let Some(label) = func_name.split("slider").nth(1) {
+                                next_ui_items.push(RuntimeUi::Slider(label.to_string()))
+                            }
+                        } else if func_name.starts_with("toggle") {
+                            let var = func_name.split("toggle").nth(1);
+                            debug!("{var:?}");
+                        } else if func_name.starts_with("hsvPicker") {
+                            todo!()
+                        } else if func_name.starts_with("rgbPicker") {
+                            todo!()
+                        } else if func_name.starts_with("trigger") {
+                            todo!()
+                        } else if func_name.starts_with("inputNumber") {
+                            todo!()
+                        } else if func_name.starts_with("showNumber") {
+                            todo!()
+                        } else if func_name.starts_with("gauge") {
+                            todo!()
+                        }
+                    }
+
+                    let mut executor = Executor::new(vm, pixel_count);
+
+                    executor.start();
+                    // TODO
+                    // executor.with_mut(|ex| ex.on_slider("slider".to_string() + &name, new_val));
+
+                    loop {
+                        executor.do_frame();
+                        let runtime = executor.runtime().unwrap();
+                        let leds = runtime.leds().unwrap();
+                        let num_leds = leds.len();
+
+                        for (i, led) in leds.iter().enumerate() {
+                            let r = led.red * 255.;
+                            let g = led.green * 255.;
+                            let b = led.blue * 255.;
+                            let color = format!("rgb({r},{g},{b})");
+                            context.set_fill_style(&color.into());
+                            context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                        }
+                        TimeoutFuture::new(30).await;
+                    }
+                }
             }
+        },
+    );
+
+    use_effect(cx, (), |_| {
+        to_owned![canvas_context];
+        async move {
+            let document = window().document();
+            let canvas = document.unwrap().get_element_by_id("pixels").unwrap();
+            let canvas: web_sys::HtmlCanvasElement = canvas
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .map_err(|_| ())
+                .unwrap();
+            let context = canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<web_sys::CanvasRenderingContext2d>()
+                .unwrap();
+            canvas_context.set(Some(context));
         }
     });
-    let content = rsx!(div { inner });
 
-    cx.render(content)
-}
-
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
-struct AppConfig {
-    endpoints: Vec<String>,
-    pixel_count: usize,
-    initial_js_file: String,
-    initial_js: Option<String>,
+    cx.render(rsx!(canvas { id: "pixels" }))
 }
 
 #[allow(non_snake_case)]
@@ -76,96 +146,31 @@ fn RenderExecutor(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
     // TODO remove im collections; proper usage: see embedded ui
     let slider_vars = use_state(&cx, SliderVars::default);
 
-    let ui_items = use_state(cx, || {
+    let bytecode = use_state(&cx, || compile(&js, Flavor::Pixelblaze).unwrap());
+    let ui_items = use_ref(cx, || {
         let res: Vec<RuntimeUi> = vec![];
         res
     });
 
-    let executor: &UseRef<Executor<PixelBlazeFFI, WebRuntime>> = use_ref(&cx, || {
-        let mut ser = compile(js.as_str(), Flavor::Pixelblaze).unwrap();
-        let mut vm: VM<PixelBlazeFFI, WebRuntime> = postcard::from_bytes_cobs(&mut ser).unwrap();
-        vm.runtime_mut().init(pixel_count);
-        let mut executor = Executor::new(vm, pixel_count);
-
-        executor.start();
-        executor
-    });
-
-    cx.spawn({
-        to_owned![executor];
-        async move {
-            TimeoutFuture::new(100).await;
-            executor.write().do_frame();
-        }
-    });
-
-    let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<RecompileState>| {
-        to_owned![executor, ui_items];
+    let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<Vec<u8>>| {
+        to_owned![ui_items, js, bytecode];
 
         async move {
-            while let Some(mut recompile_state) = rx.next().await {
+            while let Some(mut vm_ser) = rx.next().await {
                 debug!("refresh executor");
-
-                let RecompileState {
-                    mut vm_bytes,
-                    slider_vars,
-                } = recompile_state;
-                let mut next_vm: VM<PixelBlazeFFI, WebRuntime> =
-                    postcard::from_bytes_cobs(&mut vm_bytes).unwrap();
-                next_vm.runtime_mut().init(pixel_count);
-
-                let mut next_ui_items = vec![];
-                for (func_name, _) in next_vm
-                    .funcs()
-                    .iter()
-                    .sorted_by(|(k, _), (k2, _)| k.cmp(k2))
-                {
-                    if func_name.starts_with("slider") {
-                        if let Some(label) = func_name.split("slider").nth(1) {
-                            next_ui_items.push(RuntimeUi::Slider(label.to_string()))
-                        }
-                    } else if func_name.starts_with("toggle") {
-                        let var = func_name.split("toggle").nth(1);
-                        debug!("{var:?}");
-                    } else if func_name.starts_with("hsvPicker") {
-                        todo!()
-                    } else if func_name.starts_with("rgbPicker") {
-                        todo!()
-                    } else if func_name.starts_with("trigger") {
-                        todo!()
-                    } else if func_name.starts_with("inputNumber") {
-                        todo!()
-                    } else if func_name.starts_with("showNumber") {
-                        todo!()
-                    } else if func_name.starts_with("gauge") {
-                        todo!()
-                    }
-                }
-
-                ui_items.set(next_ui_items);
-
-                let vm = executor.write_silent().take_vm().unwrap();
-                let rt = vm.dismember();
-                *next_vm.runtime_mut() = rt;
-                executor.write_silent().set_vm(next_vm);
-                executor.write().start();
-
-                for (k, v) in slider_vars.iter() {
-                    executor.with_mut(|ex| ex.on_slider("slider".to_string() + k, *v));
-                }
+                bytecode.set(vm_ser.clone());
             }
         }
     })
     .to_owned();
     let endpoints = config.endpoints.clone();
 
-    let _code_updated = use_future(&cx, (js, slider_vars), |(js, slider_vars)| async move {
+    let _vars_updates = use_future(&cx, slider_vars, |slider_vars| async move {
+        debug!("slider vars updated");
+    });
+    let _code_updated = use_future(&cx, js, |js| async move {
         if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
-            let state = RecompileState {
-                vm_bytes: ser.clone(),
-                slider_vars: slider_vars.get().clone(),
-            };
-            recompile.send(state);
+            recompile.send(ser.clone());
 
             let mut futs = vec![];
             for url in endpoints.iter().cloned() {
@@ -184,15 +189,15 @@ fn RenderExecutor(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
 
     cx.render(rsx! {
 
-        Pixels { executor: executor.clone() }
+        Pixels { bytecode: bytecode.clone(), pixel_count: pixel_count }
 
-        ui_items.iter().map(|item| match item {
+        ui_items.read().iter().map(|item| match item {
             RuntimeUi::Slider(name) => rsx!(
                 UiSlider {
                     key: "{name}",
                     name: name.clone(),
                     vars: slider_vars.clone(),
-                    executor: executor.clone() }
+                    }
             ),
             _ => rsx!{"TODO"}
 
