@@ -75,17 +75,17 @@ fn Pixels(cx: Scope, bytecode: UseState<Vec<u8>>, pixel_count: usize) -> Element
                             let var = func_name.split("toggle").nth(1);
                             debug!("{var:?}");
                         } else if func_name.starts_with("hsvPicker") {
-                            todo!()
+                            log::error!("todo")
                         } else if func_name.starts_with("rgbPicker") {
-                            todo!()
+                            log::error!("todo")
                         } else if func_name.starts_with("trigger") {
-                            todo!()
+                            log::error!("todo")
                         } else if func_name.starts_with("inputNumber") {
-                            todo!()
+                            log::error!("todo")
                         } else if func_name.starts_with("showNumber") {
-                            todo!()
+                            log::error!("todo")
                         } else if func_name.starts_with("gauge") {
-                            todo!()
+                            log::error!("todo")
                         }
                     }
 
