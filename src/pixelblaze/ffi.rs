@@ -103,6 +103,9 @@ where
 }
 
 pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> CellData {
+    if interval == 0 {
+        return CellData::from_num(0);
+    }
     let fac = interval * (u16::MAX as i32);
     let now = CellData::from_num((runtime.time_millis()) % 32768);
     let res = (now / fac).frac();

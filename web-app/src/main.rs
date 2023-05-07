@@ -1,12 +1,15 @@
-use std::{collections::HashMap, str::from_utf8};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, str::from_utf8, sync::mpsc};
 
 use config::Config;
 use dioxus::prelude::*;
 use futures::{channel::oneshot, future, StreamExt};
 use gloo::{timers::future::TimeoutFuture, utils::window};
 use itertools::Itertools;
-use log::debug;
-use render::{RuntimeUi, UiSlider};
+use local_subscription::{
+    use_local_subscription_root, use_split_subscriptions, LocalSubscription, SplitSubscription,
+};
+use log::{debug, warn};
+use render::{slider_val_normalized, RuntimeUi, UiSlider};
 use serde::Deserialize;
 use trenchcoat::{
     forth::{
@@ -20,16 +23,11 @@ use web_sys::CanvasRenderingContext2d;
 
 use crate::runtime::WebRuntime;
 
+mod local_subscription;
 mod render;
 mod runtime;
 
 type WebExecutor = Executor<PixelBlazeFFI, WebRuntime>;
-struct RecompileState {
-    vm_bytes: Vec<u8>,
-    slider_vars: SliderVars,
-}
-
-pub(crate) type SliderVars = im_rc::HashMap<String, f32>;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 struct AppConfig {
@@ -47,22 +45,41 @@ fn main() {
     dioxus_web::launch_with_props(app, (), dioxus_web::Config::new());
 }
 
+type PBExector = Executor<PixelBlazeFFI, WebRuntime>;
+type VMState = SplitSubscription<Vec<RuntimeUi>, PBExector>;
+
 #[allow(non_snake_case)]
 #[inline_props]
-fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
+fn Trenchcoat(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
     let pixel_count = config.pixel_count;
-    // TODO add manual flush?
-    // TODO remove im collections; proper usage: see embedded ui
-    let slider_vars = use_state(&cx, SliderVars::default);
-
+    let slider_vars = use_ref(&cx, || HashMap::<String, f32>::new());
     let bytecode = use_state(&cx, || compile(&js, Flavor::Pixelblaze).unwrap());
-    let ui_items = use_ref(cx, || {
-        let res: Vec<RuntimeUi> = vec![];
-        res
+
+    let (slider_tx, slider_rx) = cx.use_hook(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<(String, f32)>();
+        (tx, Rc::new(rx))
     });
 
+    let vm_state: &VMState = use_context_provider(cx, || {
+        let mut bytecode = bytecode.get().clone();
+
+        let mut vm: VM<PixelBlazeFFI, WebRuntime> =
+            postcard::from_bytes_cobs(&mut bytecode).unwrap();
+        vm.runtime_mut().init(pixel_count);
+
+        let mut executor = Executor::new(vm, pixel_count);
+        executor.start();
+
+        let state = LocalSubscription::create(cx, Default::default());
+        SplitSubscription::new(state, executor)
+    });
+
+    let executor = vm_state.t.clone();
+
+    let ui_items: &UseState<Vec<RuntimeUi>> = use_state(cx, || vec![]);
+
     let recompile = use_coroutine(&cx, |mut rx: UnboundedReceiver<Vec<u8>>| {
-        to_owned![ui_items, js, bytecode];
+        to_owned![bytecode];
 
         async move {
             while let Some(mut vm_ser) = rx.next().await {
@@ -74,9 +91,6 @@ fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
     .to_owned();
     let endpoints = config.endpoints.clone();
 
-    let _vars_updates = use_future(&cx, slider_vars, |slider_vars| async move {
-        debug!("slider vars updated");
-    });
     let _code_updated = use_future(&cx, js, |js| async move {
         if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
             recompile.send(ser.clone());
@@ -102,20 +116,41 @@ fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
         cx,
         (bytecode, canvas_context),
         |(bytecode, canvas_context)| {
-            to_owned![pixel_count];
+            to_owned![pixel_count, ui_items, executor, slider_rx, slider_vars];
+            let c = canvas_context.get();
             async move {
                 if let Some(context) = canvas_context.get() {
                     let mut bytecode = bytecode.get().clone();
 
+                    // TODO we pipe every vm update through a ser+de step
+                    // because that's how compile() works... suboptimal
                     let mut vm: VM<PixelBlazeFFI, WebRuntime> =
                         postcard::from_bytes_cobs(&mut bytecode).unwrap();
                     vm.runtime_mut().init(pixel_count);
 
-                    let mut next_ui_items = vec![];
-                    for (func_name, _) in vm.funcs().iter().sorted_by(|(k, _), (k2, _)| k.cmp(k2)) {
+                    let funcs = vm.funcs().clone();
+                    {
+                        let mut executor = executor.lock().unwrap();
+                        let old_vm = executor.take_vm().unwrap();
+                        let rt = old_vm.dismember();
+                        *vm.runtime_mut() = rt;
+                        executor.set_vm(vm);
+                        executor.start();
+                    }
+
+                    let mut next_ui_items: Vec<RuntimeUi> = vec![];
+                    for (func_name, _) in funcs.iter().sorted_by(|(k, _), (k2, _)| k.cmp(k2)) {
                         if func_name.starts_with("slider") {
                             if let Some(label) = func_name.split("slider").nth(1) {
-                                next_ui_items.push(RuntimeUi::Slider(label.to_string()))
+                                next_ui_items.push(RuntimeUi::Slider(label.to_string()));
+                                slider_vars.with(|slider_vars| {
+                                    if let Some(val) = slider_vars.get(label) {
+                                        executor
+                                            .lock()
+                                            .unwrap()
+                                            .on_slider("slider".to_string() + label, *val);
+                                    }
+                                })
                             }
                         } else if func_name.starts_with("toggle") {
                             let var = func_name.split("toggle").nth(1);
@@ -135,26 +170,29 @@ fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
                         }
                     }
 
-                    let mut executor = Executor::new(vm, pixel_count);
-
-                    executor.start();
-                    // TODO
-                    // executor.with_mut(|ex| ex.on_slider("slider".to_string() + &name, new_val));
+                    ui_items.set(next_ui_items);
 
                     loop {
-                        executor.do_frame();
-                        let runtime = executor.runtime().unwrap();
-                        let leds = runtime.leds().unwrap();
-                        let num_leds = leds.len();
+                        if let Ok(mut executor) = executor.lock() {
+                            while let Ok((name, val)) = slider_rx.try_recv() {
+                                debug!("{name:?}");
+                                executor.on_slider("slider".to_string() + &name, val);
+                            }
+                            executor.do_frame();
+                            let runtime = executor.runtime().unwrap();
+                            let leds = runtime.leds().unwrap();
+                            let num_leds = leds.len();
 
-                        for (i, led) in leds.iter().enumerate() {
-                            let r = led.red * 255.;
-                            let g = led.green * 255.;
-                            let b = led.blue * 255.;
-                            let color = format!("rgb({r},{g},{b})");
-                            context.set_fill_style(&color.into());
-                            context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                            for (i, led) in leds.iter().enumerate() {
+                                let r = led.red * 255.;
+                                let g = led.green * 255.;
+                                let b = led.blue * 255.;
+                                let color = format!("rgb({r},{g},{b})");
+                                context.set_fill_style(&color.into());
+                                context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                            }
                         }
+
                         TimeoutFuture::new(30).await;
                     }
                 }
@@ -182,19 +220,35 @@ fn CodeUpdateLoop(cx: Scope, js: UseState<String>, config: AppConfig) -> Element
     });
 
     cx.render(rsx! {
-
-        canvas { id: "pixels" }
-
-        ui_items.read().iter().map(|item| match item {
-            RuntimeUi::Slider(name) => rsx!(
-                UiSlider {
-                    key: "{name}",
-                    name: name.clone(),
-                    vars: slider_vars.clone(),
+        canvas {
+            id: "pixels",
+            width: 400,
+            height: 10
+        }
+        ui_items.iter().map(|item| {
+            to_owned![slider_tx];
+            match item {
+                RuntimeUi::Slider(name) => rsx!(
+                    div {
+                        UiSlider {
+                            key: "{name}",
+                            name: name,
+                            val: slider_vars.with(|slider_vars| {
+                                let res = slider_vars.get(name).cloned().unwrap_or_default();
+                                res
+                            }),
+                            oninput: move |ev: FormEvent| {
+                                let val = slider_val_normalized(&ev.value);
+                                slider_vars.with_mut(|slider_vars| slider_vars.insert(name.clone(), val));
+                                slider_tx.send((name.clone(), val));
+                            },
+                        }
                     }
-            ),
-            _ => rsx!{"TODO"}
 
+                ),
+                _ => rsx!{"TODO"}
+
+            }
         })
     })
 }
@@ -227,7 +281,7 @@ fn app(cx: Scope) -> Element {
             }
         }
         hr {}
-        CodeUpdateLoop { js: js.clone(), config: config }
+        Trenchcoat { js: js.clone(), config: config }
 
     })
 }

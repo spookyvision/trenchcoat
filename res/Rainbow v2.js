@@ -6,12 +6,12 @@ var lightness = 1
 
 export function sliderColorMod(v) { colorMod = v - 1 }
 export function sliderSpeed(v) { speed = v }
-export function sliderDirection(v) { 
-  if(v < 0.5) {
-    direction = -1 
-  } else {
-    direction = 1
-  }
+export function sliderDirection(v) {
+  // if(v < 0.5) {
+  direction = -1
+  // } else {
+  direction = 1
+  // }
 }
 export function sliderSaturation(v) { saturation = v }
 export function sliderLightness(v) { lightness = v }
@@ -21,7 +21,7 @@ export function beforeRender(delta) {
 }
 
 export function render(index) {
-  h = t1 + index/pixelCount * colorMod
+  h = t1 + index / pixelCount * colorMod
   s = saturation
   v = lightness
   hsv(h, s, v)
