@@ -39,7 +39,6 @@ struct AppConfig {
 
 fn main() {
     console_error_panic_hook::set_once();
-    debug!("?");
     wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
 
     dioxus_web::launch_with_props(app, (), dioxus_web::Config::new());
@@ -156,7 +155,6 @@ fn Trenchcoat(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
                             }
                         } else if func_name.starts_with("toggle") {
                             let var = func_name.split("toggle").nth(1);
-                            debug!("{var:?}");
                         } else if func_name.starts_with("hsvPicker") {
                             log::error!("todo")
                         } else if func_name.starts_with("rgbPicker") {
@@ -177,7 +175,6 @@ fn Trenchcoat(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
                     loop {
                         if let Ok(mut executor) = executor.lock() {
                             while let Ok((name, val)) = slider_rx.try_recv() {
-                                debug!("{name:?}");
                                 executor.on_slider("slider".to_string() + &name, val);
                             }
                             executor.do_frame();
