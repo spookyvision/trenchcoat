@@ -13,7 +13,7 @@ use render::{slider_val_normalized, RuntimeUi, UiSlider};
 use serde::Deserialize;
 use trenchcoat::{
     forth::{
-        compiler::{compile, Flavor},
+        compiler::{compile, Flavor, Source},
         vm::{CellData, VM},
     },
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
@@ -53,7 +53,9 @@ type VMState = SplitSubscription<Vec<RuntimeUi>, PBExector>;
 fn Trenchcoat(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
     let pixel_count = config.pixel_count;
     let slider_vars = use_ref(&cx, || HashMap::<String, f32>::new());
-    let bytecode = use_state(&cx, || compile(&js, Flavor::Pixelblaze).unwrap());
+    let bytecode = use_state(&cx, || {
+        compile(Source::String(&js), Flavor::Pixelblaze).unwrap()
+    });
 
     let (slider_tx, slider_rx) = cx.use_hook(|| {
         let (tx, rx) = std::sync::mpsc::channel::<(String, f32)>();
@@ -92,7 +94,7 @@ fn Trenchcoat(cx: Scope, js: UseState<String>, config: AppConfig) -> Element {
     let endpoints = config.endpoints.clone();
 
     let _code_updated = use_future(&cx, js, |js| async move {
-        if let Ok(mut ser) = compile(&js, Flavor::Pixelblaze) {
+        if let Ok(mut ser) = compile(Source::String(&js), Flavor::Pixelblaze) {
             recompile.send(ser.clone());
 
             let mut futs = vec![];

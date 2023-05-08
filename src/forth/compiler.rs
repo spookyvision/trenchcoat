@@ -30,28 +30,23 @@ pub enum Flavor {
     Pixelblaze,
 }
 
-#[cfg(feature = "tty")]
-pub type Source = Box<std::path::Path>;
+#[derive(Debug)]
+pub enum Source<'a> {
+    File(Box<std::path::Path>),
+    String(&'a str),
+}
 
-#[cfg(not(feature = "tty"))]
-pub type Source = str;
-
-pub fn compile(source: &Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
+pub fn compile(source: Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
     let source_map: Lrc<SourceMap> = Default::default();
-    let source_file;
-    #[cfg(feature = "tty")]
-    {
-        source_file = source_map
-            .load_file(source)
-            .with_context(|| format!("Failed to load {source:?}"))?;
-    }
-    #[cfg(not(feature = "tty"))]
-    {
-        source_file = source_map.new_source_file(
+    let source_file = match &source {
+        Source::File(path) => source_map
+            .load_file(&path)
+            .with_context(|| format!("Failed to load {source:?}"))?,
+        Source::String(source) => source_map.new_source_file(
             swc_common::FileName::Custom("__trenchcc_generated.js".into()),
-            source.into(),
-        );
-    }
+            source.to_string(),
+        ),
+    };
 
     let lexer = Lexer::new(
         // We want to parse ecmascript

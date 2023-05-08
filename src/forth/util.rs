@@ -111,11 +111,7 @@ mod tests {
         stack.push(Cell::Op(Op::FFI(VanillaJSFFI::ConsoleLog)));
         dbg!(&stack);
 
-        let mut vm = VM::new(
-            Stack::from_slice(&stack).unwrap(),
-            Default::default(),
-            TestRuntime::new(),
-        );
+        let mut vm = VM::new(stack, Default::default(), TestRuntime::new());
         vm.run().ok();
         let rt = vm.dismember();
         assert_eq!(Some(s), rt.last_log());

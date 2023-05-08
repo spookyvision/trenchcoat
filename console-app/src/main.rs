@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::Path};
 
 use trenchcoat::{
     forth::{
-        compiler::{compile, Flavor},
+        compiler::{compile, Flavor, Source},
         vm::VM,
     },
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, runtime::ConsoleRuntime},
@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = "../res/rainbow melt.js";
 
     let mut ser = compile(
-        &Path::new(file).to_path_buf().into_boxed_path(),
+        Source::File(Path::new(file).to_path_buf().into_boxed_path()),
         Flavor::Pixelblaze,
     )?;
     let vm: VM<PixelBlazeFFI, ConsoleRuntime> = postcard::from_bytes_cobs(&mut ser)?;

@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write};
 
 use clap::Parser;
-use trenchcoat::forth::compiler::{compile, Flavor};
+use trenchcoat::forth::compiler::{compile, Flavor, Source};
 
 /// Trenchcoat bytecode compiler
 #[derive(clap::Parser, Debug)]
@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
     let file = args.in_file.into_boxed_path();
-    let ser = compile(&file, args.flavor)?;
+    let ser = compile(Source::File(file), args.flavor)?;
     File::create(args.out_file)?.write_all(&ser)?;
     Ok(())
 }
