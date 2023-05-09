@@ -182,14 +182,14 @@ where
                 self.eval_expr(&bin_expr.left);
                 self.eval_expr(&bin_expr.right);
                 let _ = match bin_expr.op {
-                    BinaryOp::EqEq => todo!(),
-                    BinaryOp::NotEq => todo!(),
+                    BinaryOp::EqEq => self.stack.push(Cell::Op(Op::EqEq)),
+                    BinaryOp::NotEq => self.stack.push(Cell::Op(Op::NotEq)),
                     BinaryOp::EqEqEq => todo!(),
                     BinaryOp::NotEqEq => todo!(),
-                    BinaryOp::Lt => todo!(),
-                    BinaryOp::LtEq => todo!(),
-                    BinaryOp::Gt => todo!(),
-                    BinaryOp::GtEq => todo!(),
+                    BinaryOp::Lt => self.stack.push(Cell::Op(Op::Lt)),
+                    BinaryOp::LtEq => self.stack.push(Cell::Op(Op::LtEq)),
+                    BinaryOp::Gt => self.stack.push(Cell::Op(Op::Gt)),
+                    BinaryOp::GtEq => self.stack.push(Cell::Op(Op::GtEq)),
                     BinaryOp::LShift => todo!(),
                     BinaryOp::RShift => todo!(),
                     BinaryOp::ZeroFillRShift => todo!(),
@@ -380,9 +380,16 @@ where
     //     let sym_str = n.sym.as_ref();
     //     println!("ID {sym_str}");
     // }
-    // fn visit_if_stmt(&mut self, n: &IfStmt) {
-    //     println!("if {:?}", n.test);
-    // }
+    fn visit_if_stmt(&mut self, n: &IfStmt) {
+        self.visit_expr(&n.test);
+        self.stack.push(Op::If.into());
+        self.visit_stmt(&n.cons);
+        if let Some(alt) = &n.alt {
+            self.stack.push(Op::Else.into());
+            self.visit_stmt(alt);
+        }
+        self.stack.push(Op::Then.into());
+    }
     // fn visit_assign_expr(&mut self, n: &AssignExpr) {
     //     println!("ass ex {:?}", n);
     // }
@@ -438,4 +445,18 @@ fn var_name(pat: &Pat) -> &str {
         .expect("can't make sense of this variable name");
 
     res
+}
+
+#[test]
+fn test_if() -> anyhow::Result<()> {
+    let source = r#"
+    if (1 > 0) {
+        x = 1
+    } else {
+        x = 2
+    }
+    "#;
+
+    let _ = compile(Source::String(source), Flavor::VanillaJS)?;
+    Ok(())
 }

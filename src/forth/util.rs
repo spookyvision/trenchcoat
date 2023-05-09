@@ -80,7 +80,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        forth::vm::{Cell, Op, Stack},
+        forth::vm::{Cell, Op},
         vanillajs::runtime::{stud::TestRuntime, VanillaJSFFI},
     };
 

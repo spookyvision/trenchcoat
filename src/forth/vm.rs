@@ -95,8 +95,6 @@ pub enum FFIError {
 #[derive(Debug, Serialize, Deserialize)]
 
 pub enum VMError {
-    #[cfg_attr(feature = "use-std", error("FixmeNotAnErrorExhausted"))]
-    FixmeNotAnErrorExhausted,
     #[cfg_attr(feature = "use-std", error("type coercion failed"))]
     TypeCoercion,
     #[cfg_attr(feature = "use-std", error("FFI bork"))]
@@ -125,6 +123,12 @@ pub enum Op<FFI> {
     Nruter, // return stack -> data stack
     ExitFn, // TODO never used, remove/change?
     PopRet, // pop return stack
+    EqEq,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
     Add,
     Sub,
     Mul,
@@ -132,6 +136,11 @@ pub enum Op<FFI> {
     Mod,
     And,
     Or,
+    If,
+    Then,
+    Else,
+    // TODO can we get rid of these strings?
+    // TODO can we optimize Call in particular?
     Call(VarString),
     DeclVar(VarString),
     SetVar(VarString),
@@ -143,6 +152,19 @@ type BinOp = fn(CellData, CellData) -> CellData;
 
 fn err(s: &str) {
     panic!("ERR: {s}")
+}
+
+trait BoolExt {
+    fn to_fixed(&self) -> CellData;
+}
+
+impl BoolExt for bool {
+    fn to_fixed(&self) -> CellData {
+        match self {
+            true => CellData::from_num(1),
+            false => CellData::from_num(0),
+        }
+    }
 }
 
 // TODO use Option<Cell> instead of `Cell::Null`?
@@ -281,17 +303,18 @@ where
         }
     }
 
-    fn binary_op(&mut self, op: BinOp) {
+    fn binary_op(&mut self, op: BinOp) -> Result<(), VMError> {
         // TODO error propagation ("Exhausted" should not be an error...)
         // trench_debug!("\n\n\n\n---bop\n");
         self.dump_state();
-        self.run().ok();
+        self.run()?;
         self.dump_state();
         let y = self.pop_unchecked().unwrap_val();
-        self.run().ok();
+        self.run()?;
         let x = self.pop_unchecked().unwrap_val();
 
         self.push(Cell::Val(op(x, y)));
+        Ok(())
     }
 
     fn eval(&mut self, op: &Op<FFI>) -> Result<(), VMError> {
@@ -318,13 +341,75 @@ where
             Op::Call(name) => {
                 self.call_fn(name);
             }
-            Op::Add => self.binary_op(|x, y| x + y),
-            Op::Sub => self.binary_op(|x, y| x - y),
-            Op::Mul => self.binary_op(|x, y| x * y),
-            Op::Div => self.binary_op(|x, y| x / y),
-            Op::Mod => self.binary_op(|x, y| x % y),
-            Op::And => self.binary_op(|x, y| x & y),
-            Op::Or => self.binary_op(|x, y| x | y),
+            Op::If => return Err(VMError::Malformed),
+            Op::Then => {
+                let mut if_idx = None;
+                let mut else_idx = None;
+                for (idx, elem) in self.stack.iter().enumerate().rev() {
+                    match elem {
+                        Cell::Op(op) => {
+                            if *op == Op::If {
+                                if_idx = Some(idx);
+                                break;
+                            }
+                            if *op == Op::Else {
+                                else_idx = Some(idx);
+                            }
+                        }
+                        _ => {
+                            continue;
+                        }
+                    }
+                }
+
+                // TODO horrible, plz refactor a la
+                // https://github.com/dewaka/forth-rs/blob/master/src/forth/inter.rs#L111
+                match if_idx {
+                    None | Some(0) => return Err(VMError::Malformed),
+                    Some(if_idx) => {
+                        // set aside
+                        let mut else_part: Option<Vec<_>> = None;
+                        let if_part: Vec<_> = match else_idx {
+                            Some(else_idx) => {
+                                else_part = Some(self.stack.drain(else_idx..).collect());
+                                self.stack.drain(if_idx..else_idx).collect()
+                            }
+                            None => self.stack.drain(if_idx..).collect(),
+                        };
+
+                        // check condition on top of stack
+                        self.run()?;
+                        match self.top() {
+                            Some(Cell::Val(cond)) => {
+                                // TODO better bool handling?
+                                if *cond == CellData::from_num(1) {
+                                    self.stack.extend(if_part);
+                                } else {
+                                    if else_part.is_some() {
+                                        self.stack.extend(else_part.unwrap());
+                                    }
+                                }
+                            }
+                            _ => return Err(VMError::Malformed),
+                        }
+                    }
+                }
+            }
+            Op::Else => return Err(VMError::Malformed),
+
+            Op::EqEq => self.binary_op(|x, y| (x == y).to_fixed())?,
+            Op::NotEq => self.binary_op(|x, y| (x != y).to_fixed())?,
+            Op::Lt => self.binary_op(|x, y| (x < y).to_fixed())?,
+            Op::LtEq => self.binary_op(|x, y| (x <= y).to_fixed())?,
+            Op::Gt => self.binary_op(|x, y| (x > y).to_fixed())?,
+            Op::GtEq => self.binary_op(|x, y| (x >= y).to_fixed())?,
+            Op::Add => self.binary_op(|x, y| x + y)?,
+            Op::Sub => self.binary_op(|x, y| x - y)?,
+            Op::Mul => self.binary_op(|x, y| x * y)?,
+            Op::Div => self.binary_op(|x, y| x / y)?,
+            Op::Mod => self.binary_op(|x, y| x % y)?,
+            Op::And => self.binary_op(|x, y| x & y)?,
+            Op::Or => self.binary_op(|x, y| x | y)?,
 
             Op::GetVar(name) => {
                 self.push(Cell::Val(*self.get_var(name).expect("variable not found")))
@@ -333,7 +418,7 @@ where
                 // TODO error propagation
 
                 // dbg!("setvar start:", name);
-                self.run().ok();
+                self.run()?;
                 // dbg!("setvar: end run");
                 let val = self.pop_unchecked().unwrap_val();
                 // dbg!("setvar", val);
@@ -345,12 +430,12 @@ where
             Op::FFI(ffi_fn) => {
                 let mut params = DefaultStack::new();
                 for param in ffi_fn.call_info() {
-                    let top = self.top().ok_or(VMError::FixmeNotAnErrorExhausted)?;
+                    let top = self.top().ok_or(VMError::Underflow)?;
                     match param {
                         Param::Normal => {
-                            self.run().ok();
+                            self.run()?;
                             let pop = self.pop();
-                            params.push(pop.ok_or(VMError::FixmeNotAnErrorExhausted)?);
+                            params.push(pop.ok_or(VMError::Underflow)?);
                         }
                         Param::DynPacked => {
                             let param_len = (top.unwrap_raw() as usize).div_ceil(4) + 1;
@@ -381,7 +466,6 @@ where
         }
 
         self.dump_state();
-        // TODO
         Ok(())
     }
 
@@ -418,7 +502,7 @@ where
                 for param in &func.params {
                     self.stack.push(Op::SetVar(param.clone()).into());
                     self.stack.push(Op::DeclVar(param.clone()).into());
-                    self.run().ok();
+                    self.run()?;
                 }
                 self.stack.push(Op::Nruter.into());
                 self.stack.extend(func.stack.iter().cloned());
@@ -573,7 +657,7 @@ where
 
             // trench_trace!("{op:?} done\n------------------------");
         }
-        Err(VMError::FixmeNotAnErrorExhausted)
+        Ok(())
     }
 
     pub fn stack(&self) -> &[Cell<FFI>] {
@@ -596,11 +680,17 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{forth::util::assert_similar, pixelblaze::ffi::PixelBlazeFFI};
+    use crate::{
+        forth::{
+            compiler::{compile, Flavor, Source},
+            util::assert_similar,
+        },
+        pixelblaze::{ffi::PixelBlazeFFI, runtime::ConsoleRuntime},
+        vanillajs::runtime::VanillaJSFFI,
+    };
 
     #[test]
     fn test_serde() -> anyhow::Result<()> {
-        todo!();
         // let mut vm = vm();
 
         // vm.push(Cell::val(5));
@@ -616,6 +706,24 @@ mod tests {
         // de.do_return();
         // assert_eq!(&[Cell::val(90)], &de.return_stack);
         // assert_eq!(&[], &de.stack);
+        Ok(())
+    }
+
+    #[test]
+    fn test_if() -> anyhow::Result<()> {
+        let source = r#"
+    if (1 < 0) {
+        x = 1
+    } else {
+        x = 2
+    }
+    "#;
+
+        let mut bytecode = compile(Source::String(source), Flavor::VanillaJS)?;
+        let mut de: VM<VanillaJSFFI, ConsoleRuntime> = postcard::from_bytes_cobs(&mut bytecode)?;
+        de.run();
+        let x = de.get_var("x");
+        assert_eq!(x, Some(&CellData::from_num(2)));
         Ok(())
     }
 }
