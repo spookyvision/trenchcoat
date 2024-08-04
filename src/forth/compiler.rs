@@ -43,7 +43,7 @@ pub fn compile(source: Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
             .load_file(&path)
             .with_context(|| format!("Failed to load {source:?}"))?,
         Source::String(source) => source_map.new_source_file(
-            swc_common::FileName::Custom("__trenchcc_generated.js".into()),
+            swc_common::FileName::Custom("__trenchcc_generated.js".into()).into(),
             source.to_string(),
         ),
     };
@@ -212,8 +212,8 @@ where
             Expr::Assign(ass) => {
                 let left = &ass.left;
 
-                let name = left.as_pat().expect("wat is this {left:?}");
-                let name = var_name(name);
+                let name: &AssignTargetPat = left.as_pat().expect("wat is this {left:?}");
+                let name = var_name(PatWrap::AssignTargetPat(name));
                 let right = &ass.right;
                 trace!("assign {name} = {:?}", right);
 
@@ -371,7 +371,7 @@ where
         let params: Vec<String> = func
             .params
             .iter()
-            .map(|p| var_name(&p.pat).to_owned())
+            .map(|p| var_name(PatWrap::Pat(&p.pat)))
             .collect();
         self.func_defs
             .insert(name.to_string(), FuncDef::new(&params, child_visor.stack));
@@ -421,7 +421,7 @@ where
     fn visit_var_decl(&mut self, n: &VarDecl) {
         // TODO make this work for > 1 decl
         for decl in n.decls.iter() {
-            let name = var_name(&decl.name);
+            let name = var_name(PatWrap::Pat(&decl.name));
 
             trace!("<decl {name} = ");
 
@@ -429,22 +429,36 @@ where
                 self.inside_assignment = true;
                 self.eval_expr(init);
                 self.inside_assignment = false;
-                self.stack.push(Op::SetVar(name.into()).into());
+                self.stack.push(Op::SetVar(name.clone()).into());
             }
-            self.stack.push(Op::DeclVar(name.into()).into());
+            self.stack.push(Op::DeclVar(name.clone()).into());
 
             trace!("</decl {name}>");
         }
     }
 }
 
-fn var_name(pat: &Pat) -> &str {
+enum PatWrap<'a> {
+    Pat(&'a Pat),
+    AssignTargetPat(&'a AssignTargetPat),
+}
+
+impl<'a> PatWrap<'a> {
+    fn as_ident(&self) -> Option<&BindingIdent> {
+        match self {
+            PatWrap::Pat(p) => p.as_ident(),
+            PatWrap::AssignTargetPat(p) => todo!("swc changed and now we have this mess ;< {p:?}"),
+        }
+    }
+}
+
+fn var_name(pat: PatWrap) -> String {
     let res = pat
         .as_ident()
         .map(|id| id.sym.as_ref())
         .expect("can't make sense of this variable name");
 
-    res
+    res.to_owned()
 }
 
 #[test]

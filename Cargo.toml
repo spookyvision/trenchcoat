@@ -27,19 +27,31 @@ alloc = ["postcard/alloc"]
 log = ["dep:log"]
 defmt = ["dep:defmt"]
 tty = ["swc_common?/termcolor", "swc_common?/tty-emitter", "dep:clap"]
-compiler = ["use-std", "dep:anyhow", "dep:phf", "dep:swc_common", "dep:swc_ecma_ast", "dep:swc_ecma_parser", "dep:swc_ecma_utils", "dep:swc_ecma_visit"]
+compiler = [
+    "use-std",
+    "dep:anyhow",
+    "dep:phf",
+    "dep:swc_common",
+    "dep:swc_ecma_ast",
+    "dep:swc_ecma_parser",
+    "dep:swc_ecma_utils",
+    "dep:swc_ecma_visit",
+]
 default = ["full"]
 
 [dependencies]
-heapless = "0.7"
+heapless = "0.8"
 postcard = "1.0"
 serde = { version = "1.0.145", features = ["derive"], default-features = false }
 
-swc_common = { version = "0.29", features = [], optional = true }
-swc_ecma_ast = { version = "0.94", optional = true}
-swc_ecma_parser = { version = "0.122", features = ["debug", "swc_ecma_visit"], optional = true }
-swc_ecma_utils = { version = "0.105", optional = true}
-swc_ecma_visit = { version = "0.80", features = ["debug"], optional = true }
+swc_common = { version = "0.36", features = [], optional = true }
+swc_ecma_ast = { version = "0.117", optional = true }
+swc_ecma_parser = { version = "0.148", features = [
+    "debug",
+    "swc_ecma_visit",
+], optional = true }
+swc_ecma_utils = { version = "0.133", optional = true }
+swc_ecma_visit = { version = "0.103", features = ["debug"], optional = true }
 
 phf = { version = "0.11", features = ["macros"], optional = true }
 fixed = { version = "1", features = ["serde", "num-traits"] }
