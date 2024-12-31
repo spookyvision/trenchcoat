@@ -1,4 +1,4 @@
-use core::{fmt::Debug, marker::PhantomData};
+use core::{fmt::Debug, marker::PhantomData, str::from_utf8};
 
 use fixed::{
     traits::ToFixed,
@@ -48,6 +48,8 @@ pub(crate) mod types {
 }
 
 pub use types::*;
+
+use super::util::StackSlice;
 
 pub type DefaultStack<FFI> = Stack<FFI, 64>;
 
@@ -139,6 +141,7 @@ pub enum Op<FFI> {
     If,
     Then,
     Else,
+    CallDyn,
     // TODO can we get rid of these strings?
     // TODO can we optimize Call in particular?
     Call(VarString),
@@ -338,8 +341,25 @@ where
                 }
                 self.stack.push(cell);
             }
+            Op::CallDyn => {
+                // TODO pasta
+                let top = self.top().ok_or(VMError::Underflow)?;
+                let name_len = (top.unwrap_raw() as usize).div_ceil(4) + 1;
+                let stack_len = self.stack.len();
+
+                let name_start = stack_len - name_len;
+
+                let v: heapless::Vec<u8, 32> = StackSlice(&self.stack[name_start..])
+                    .try_into()
+                    .map_err(|_| VMError::Malformed)?;
+                let name = from_utf8(&v).map_err(|_| VMError::Malformed)?;
+                self.stack.truncate(name_start);
+                trench_debug!("call_dyn {name}");
+            }
             Op::Call(name) => {
-                self.call_fn(name);
+                if let Err(e) = self.call_fn(name) {
+                    trench_debug!("Call {e:?}");
+                }
             }
             Op::If => return Err(VMError::Malformed),
             Op::Then => {
@@ -577,7 +597,7 @@ where
             None => self.globals.get(name),
         };
         self.dump_state();
-        res.expect("variable  not found").as_ref()
+        res.expect("variable not found").as_ref()
     }
 
     pub fn push(&mut self, i: Cell<FFI>) {

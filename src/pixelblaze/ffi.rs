@@ -10,6 +10,7 @@ use crate::forth::{
 
 // TODO this sucks - any error here is not caught by the compiler
 // e.g. forget to map "rgb" => ::Rgb, boom b0rk
+// TODO also this isn't accessible at runtime, which arguably is even more sucky
 #[cfg(feature = "compiler")]
 pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
     "console_log" => PixelBlazeFFI::ConsoleLog,

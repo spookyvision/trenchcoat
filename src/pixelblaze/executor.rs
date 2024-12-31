@@ -73,6 +73,7 @@ where
         }
     }
 
+    // TODO should return whether we're done huh
     pub fn do_frame(&mut self) {
         // TODO error handling instead of if let
         if let Some(vm) = self.vm.as_mut() {

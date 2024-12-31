@@ -17,17 +17,14 @@ use super::{
     util::MockRuntime,
     vm::{types::VMVec, Cell, CellData, DefaultStack, FFIOps, FuncDef, Op, VM},
 };
-use crate::{
-    forth::util::pack,
-    pixelblaze::{self, runtime::ConsoleRuntime},
-    vanillajs,
-};
+use crate::{forth::util::pack, pixelblaze, vanillajs};
 
 #[cfg_attr(feature = "tty", derive(clap::ValueEnum))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Flavor {
     VanillaJS,
     Pixelblaze,
+    Pythonic,
 }
 
 #[derive(Debug)]
@@ -68,6 +65,8 @@ pub fn compile(source: Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
         e.clone().into_diagnostic(&handler).emit();
     }) {
         let ser = match flavor {
+            // TODO: use JS "console.log" for py "print" for now, need to come up with a smarter design
+            Flavor::Pythonic => emit(module, pixelblaze::ffi::FFI_FUNCS, MockRuntime::default()),
             Flavor::VanillaJS => emit(module, vanillajs::ffi::FFI_FUNCS, MockRuntime::default()),
             Flavor::Pixelblaze => emit(module, pixelblaze::ffi::FFI_FUNCS, MockRuntime::default()),
         }

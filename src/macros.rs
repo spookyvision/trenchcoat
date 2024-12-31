@@ -26,18 +26,18 @@ macro_rules! trench_log {
 
 // TODO, later
 
-// macro_rules! trench_trace {
-//     ($($arg:expr),*) => (trench_log!(trace, $($arg),*));
-// }
-
-// macro_rules! trench_debug {
-//     ($($arg:expr),*) => (trench_log!(debug, $($arg),*));
-// }
-
 macro_rules! trench_trace {
-    ($($arg:expr),*) => {{}};
+    ($($arg:expr),*) => (trench_log!(trace, $($arg),*));
 }
 
 macro_rules! trench_debug {
-    ($($arg:expr),*) => {{}};
+    ($($arg:expr),*) => (trench_log!(debug, $($arg),*));
 }
+
+// macro_rules! trench_trace {
+//     ($($arg:expr),*) => {{}};
+// }
+
+// macro_rules! trench_debug {
+//     ($($arg:expr),*) => {{}};
+// }

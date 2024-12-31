@@ -1,3 +1,5 @@
+use core::fmt::Debug;
+
 use super::vm::{Cell, CellData, VM};
 
 // TODO medium sized wart, what do?
@@ -16,7 +18,10 @@ pub enum StackSliceError {
     InvalidContent,
 }
 
-impl<'a, T, const N: usize> TryFrom<StackSlice<'a, T>> for heapless::Vec<u8, N> {
+impl<'a, T, const N: usize> TryFrom<StackSlice<'a, T>> for heapless::Vec<u8, N>
+where
+    T: Debug,
+{
     type Error = StackSliceError;
 
     fn try_from(stack: StackSlice<'a, T>) -> Result<Self, Self::Error> {
@@ -25,6 +30,7 @@ impl<'a, T, const N: usize> TryFrom<StackSlice<'a, T>> for heapless::Vec<u8, N> 
             .last()
             .ok_or(StackSliceError::InvalidContent)?
             .unwrap_raw() as usize;
+        trench_trace!("content_bytes_len {content_bytes_len}");
         let content_len = stack.len() - 1;
         let content = &stack[0..content_len];
         let res = &mut [0u8; N];
@@ -33,15 +39,22 @@ impl<'a, T, const N: usize> TryFrom<StackSlice<'a, T>> for heapless::Vec<u8, N> 
             .iter()
             .map(|elem| match elem {
                 Cell::Raw(val) => Ok(val),
-                _ => Err(StackSliceError::InvalidContent),
+                ohno => {
+                    trench_debug!("invalid! at the disco {ohno:?}");
+                    Err(StackSliceError::InvalidContent)
+                }
             })
             .enumerate()
         {
+            if let Err(e) = packed_bytes {
+                trench_debug!("fale {e:?}");
+            }
             // bale
             let packed_bytes = packed_bytes?;
             // TODO we can probably get a chunked iter over `res` and zip it?
             res[i * 4..][..4].copy_from_slice(&packed_bytes.to_le_bytes());
         }
+        trench_trace!("content {:?}", &res[..content_bytes_len]);
 
         // TODO using `collect` would apparently be infallible hence more straightforward;
         // also we'll never be over capacity here,
