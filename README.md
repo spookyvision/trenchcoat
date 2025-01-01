@@ -108,9 +108,9 @@ Copy `web-app/config.toml.example` to `web-app/config.toml` and set:
 - the web app is written in [Dioxus](https://dioxuslabs.com/), a react-like framework in Rust. It needs `dioxus-cli` to run.
 
 ```shell
-cargo install --git https://github.com/DioxusLabs/cli # their stable version seems broken atm
+cargo install dioxus-cli
 cd web-app
-dioxus serve
+dx serve
 $browser http://localhost:8080/
 ```
 
