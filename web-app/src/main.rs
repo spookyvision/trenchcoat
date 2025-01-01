@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
 use dioxus::{prelude::*, web::WebEventExt};
-use dioxus_logger::tracing::{debug, error, info, warn, Level};
+use dioxus_logger::tracing::{error, info, warn, Level};
 use dioxus_sdk::utils::channel::{use_channel, use_listen_channel, UseChannel};
-use futures::{future, StreamExt};
+use futures::{
+    channel::mpsc::{self, Receiver, Sender},
+    future, StreamExt,
+};
 use gloo::timers::future::TimeoutFuture;
 use itertools::Itertools;
 use render::{slider_val_normalized, RuntimeUi, UiSlider};
@@ -11,9 +14,9 @@ use serde::Deserialize;
 use trenchcoat::{
     forth::{
         compiler::{compile, Flavor, Source},
-        vm::VM,
+        vm::{FuncDef, VM},
     },
-    pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
+    pixelblaze::{executor::Executor, ffi::PixelBlazeFFI},
 };
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
@@ -47,6 +50,35 @@ fn main() {
     dioxus::launch(App);
 }
 
+fn extract_ui_items(funcs: &HashMap<String, FuncDef<PixelBlazeFFI>>) -> Vec<RuntimeUi> {
+    let mut res = vec![];
+    for (func_name, _) in funcs.iter().sorted_by(|(k, _), (k2, _)| k.cmp(k2)) {
+        if func_name.starts_with("slider") {
+            if let Some(label) = func_name.split("slider").nth(1) {
+                res.push(RuntimeUi::Slider(label.to_string()));
+            }
+        } else if func_name.starts_with("toggle") {
+            let var = func_name.split("toggle").nth(1);
+            error!("todo {func_name}")
+        } else if func_name.starts_with("hsvPicker") {
+            error!("todo {func_name}")
+        } else if func_name.starts_with("rgbPicker") {
+            error!("todo {func_name}")
+        } else if func_name.starts_with("trigger") {
+            error!("todo {func_name}")
+        } else if func_name.starts_with("inputNumber") {
+            error!("todo {func_name}")
+        } else if func_name.starts_with("showNumber") {
+            error!("todo {func_name}")
+        } else if func_name.starts_with("gauge") {
+            error!("todo {func_name}")
+        }
+    }
+
+    res
+}
+
+type SliderData = (String, f32);
 #[component]
 fn App() -> Element {
     info!("start");
@@ -60,6 +92,11 @@ fn App() -> Element {
     let pixel_count = config.pixel_count;
 
     let mut executor = use_signal(|| None);
+
+    let mut ui_items = use_signal(|| vec![]);
+    let (sliders_tx, sliders_rx) = mpsc::channel::<(String, f32)>(32);
+    let sliders_tx = use_signal(|| sliders_tx);
+    let sliders_rx = use_signal(|| sliders_rx);
 
     let code_updated = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
         while let Some(code) = rx.next().await {
@@ -76,6 +113,7 @@ fn App() -> Element {
                     vm.runtime_mut().init(pixel_count);
 
                     let funcs = vm.funcs().clone();
+                    ui_items.set(extract_ui_items(&funcs));
 
                     let mut exec = Executor::new(vm, pixel_count);
                     exec.start();
@@ -108,48 +146,108 @@ fn App() -> Element {
             }
         }
         hr {}
-        Trenchcoat2 { executor, pixel_count }
+        Trenchcoat {
+            executor,
+            pixel_count,
+            ui_items,
+            sliders_tx,
+            sliders_rx,
+        }
     }
 }
 
 #[component]
-fn Trenchcoat2(executor: Signal<Option<WebExecutor>>, pixel_count: usize) -> Element {
+fn Trenchcoat(
+    executor: Signal<Option<WebExecutor>>,
+    pixel_count: usize,
+    ui_items: Signal<Vec<RuntimeUi>>,
+    sliders_tx: Signal<Sender<SliderData>>,
+    sliders_rx: Signal<Receiver<SliderData>>,
+) -> Element {
     let mut canvas_context: Signal<Option<CanvasRenderingContext2d>> = use_signal(|| None);
     let mut delay = use_signal(|| "50".to_string());
-    let _runner = use_future(move || {
-        warn!("TODO update slider values");
-        async move {
-            loop {
-                let mut ex = executor();
-                if let Some(mut exec) = executor() {
-                    if let Some(context) = canvas_context() {
-                        exec.do_frame();
 
-                        // while let Ok((name, val)) = slider_rx.try_recv() {
-                        //     executor.on_slider("slider".to_string() + &name, val);
-                        // }
+    let exr = executor.read();
+    let globals = exr
+        .as_ref()
+        .map(|ex| ex.globals().cloned())
+        .flatten()
+        .unwrap_or_default();
+    let _r = use_resource(move || async move {
+        let Some(mut exec) = executor().clone() else {
+            return;
+        };
 
-                        let runtime = exec.runtime().unwrap();
-                        let leds = runtime.leds().unwrap();
-                        let num_leds = leds.len();
+        loop {
+            if let Some(context) = canvas_context() {
+                // TODO that's not very async of us: it would be better to use StreamExt,
+                // but then we'd need an Arc<Mutex<Executor>> and ... bleh. it's fine as is,
+                // most time is spent in the executor anyway, not busy waiting the slider channel.
+                // it WOULD be nicer though to use mpmc so we can clone a receiver instead of doing try_write
+                let Ok(mut sx) = sliders_rx.try_write() else {
+                    continue;
+                };
+                while let Ok(Some((slider_name, slider_value))) = sx.try_next() {
+                    exec.on_slider("slider".to_string() + slider_name.as_str(), slider_value);
+                }
 
-                        for (i, led) in leds.iter().enumerate() {
-                            let r = led.red * 255.;
-                            let g = led.green * 255.;
-                            let b = led.blue * 255.;
-                            let color = format!("rgb({r},{g},{b})");
-                            context.set_fill_style_str(&color);
-                            context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                if let Err(e) = exec.do_frame() {
+                    error!("VM error: {e:?}");
+                    return;
+                }
+
+                let runtime = exec.runtime().unwrap();
+                let leds = runtime.leds().unwrap();
+
+                for (i, led) in leds.iter().enumerate() {
+                    let r = led.red * 255.;
+                    let g = led.green * 255.;
+                    let b = led.blue * 255.;
+                    let color = format!("rgb({r},{g},{b})");
+                    context.set_fill_style_str(&color);
+                    context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                }
+            }
+
+            TimeoutFuture::new(delay().parse().unwrap()).await;
+        }
+    });
+
+    let ui_items_comps = ui_items.iter().map(|item| {
+        to_owned![item];
+        let mut sx = sliders_tx();
+        match item {
+            RuntimeUi::Slider(name) => {
+                let val = globals
+                    .get(&name.to_lowercase())
+                    .cloned()
+                    .flatten()
+                    .map(|fv| fv.to_num())
+                    .unwrap_or(0.5);
+                rsx! {
+                    div {
+                        UiSlider {
+                            key: "{name}",
+                            name: name.clone(),
+                            val,
+                            oninput: {
+                                move |ev: FormEvent| {
+                                    let val = slider_val_normalized(&ev.value());
+                                    if let Err(e) = sx.try_send((name.clone(), val)) {
+                                        warn!("slider update error: {e:?}");
+                                    }
+                                }
+                            },
                         }
                     }
                 }
-
-                TimeoutFuture::new(delay().parse().unwrap()).await;
             }
+            _ => rsx! { "TODO" },
         }
     });
 
     rsx! {
+        {ui_items_comps}
         input {
             r#type: "range",
             min: "16",
@@ -159,7 +257,7 @@ fn Trenchcoat2(executor: Signal<Option<WebExecutor>>, pixel_count: usize) -> Ele
                 delay.set(ev.value());
             },
         }
-        span { "frame delay ms: {delay}" }
+        label { "frame delay ms: {delay}" }
 
         canvas {
             id: "pixels",
@@ -181,201 +279,5 @@ fn Trenchcoat2(executor: Signal<Option<WebExecutor>>, pixel_count: usize) -> Ele
                 }
             },
         }
-    }
-}
-
-#[deprecated]
-#[component]
-fn Trenchcoat(js: Signal<String>, config: AppConfig) -> Element {
-    let pixel_count = config.pixel_count;
-    let mut slider_vars = use_signal(|| HashMap::<String, f32>::new());
-    let bytecode =
-        use_signal(|| compile(Source::String(js.read().as_str()), Flavor::Pixelblaze).unwrap());
-
-    let mut vm = use_signal(|| {
-        let mut bytecode = bytecode.read().clone();
-
-        let mut vm: VM<PixelBlazeFFI, WebRuntime> =
-            postcard::from_bytes_cobs(&mut bytecode).unwrap();
-        vm.runtime_mut().init(pixel_count);
-        vm
-    });
-
-    let mut executor = use_signal(|| {
-        let mut executor = Executor::new(vm.read().clone(), pixel_count);
-        executor.start();
-        executor
-    });
-
-    let slider_tx: UseChannel<(String, f32)> = use_channel(2);
-
-    let slider_rx = use_listen_channel(&slider_tx, move |message| async move {
-        warn!("TODO slider {message:?}");
-    });
-
-    let ui_items: Signal<Vec<RuntimeUi>> = use_signal(|| vec![]);
-
-    let recompile = use_coroutine(move |mut rx: UnboundedReceiver<Vec<u8>>| {
-        to_owned![bytecode];
-
-        async move {
-            while let Some(vm_ser) = rx.next().await {
-                info!("refresh executor");
-                bytecode.set(vm_ser.clone());
-            }
-        }
-    })
-    .to_owned();
-
-    // let endpoints = config.endpoints.clone();
-    error!("use_future got refactored, no more rerun/dependency mechanism");
-    let _code_updated = use_future(move || async move {
-        let endpoints = vec!["http://fail"];
-        if let Ok(ser) = compile(Source::String(js.read().as_str()), Flavor::Pixelblaze) {
-            recompile.send(ser.clone());
-
-            let mut futs = vec![];
-            for url in endpoints.iter() {
-                let ser = ser.clone();
-                futs.push(async move {
-                    warn!("TODO update endpoint at {url}");
-                    // surf::post(url)
-                    //     .content_type("multipart/form-data")
-                    //     .body_bytes(&ser)
-                    //     .await;
-                });
-            }
-            future::join_all(futs).await;
-        }
-    });
-
-    let mut canvas_context: Signal<Option<CanvasRenderingContext2d>> = use_signal(|| None);
-
-    let _render_loop = use_future(move || async move {
-        to_owned![pixel_count, ui_items, executor, slider_rx, slider_vars];
-        async move {
-            if let Some(context) = canvas_context.as_ref() {
-                let mut bytecode = bytecode.read().clone();
-
-                // TODO we pipe every vm update through a ser+de step
-                // because that's how compile() works... suboptimal
-                let mut vm: VM<PixelBlazeFFI, WebRuntime> =
-                    postcard::from_bytes_cobs(&mut bytecode).unwrap();
-                vm.runtime_mut().init(pixel_count);
-
-                let funcs = vm.funcs().clone();
-                {
-                    let mut exw = executor.write();
-                    let old_vm = exw.take_vm().unwrap();
-                    let rt = old_vm.dismember();
-                    *vm.runtime_mut() = rt;
-                    exw.set_vm(vm);
-                    exw.start();
-                }
-
-                let mut next_ui_items: Vec<RuntimeUi> = vec![];
-                for (func_name, _) in funcs.iter().sorted_by(|(k, _), (k2, _)| k.cmp(k2)) {
-                    if func_name.starts_with("slider") {
-                        if let Some(label) = func_name.split("slider").nth(1) {
-                            next_ui_items.push(RuntimeUi::Slider(label.to_string()));
-                            slider_vars.with(|slider_vars| {
-                                if let Some(val) = slider_vars.get(label) {
-                                    executor
-                                        .write()
-                                        .on_slider("slider".to_string() + label, *val);
-                                }
-                            })
-                        }
-                    } else if func_name.starts_with("toggle") {
-                        let var = func_name.split("toggle").nth(1);
-                    } else if func_name.starts_with("hsvPicker") {
-                        log::error!("todo")
-                    } else if func_name.starts_with("rgbPicker") {
-                        log::error!("todo")
-                    } else if func_name.starts_with("trigger") {
-                        log::error!("todo")
-                    } else if func_name.starts_with("inputNumber") {
-                        log::error!("todo")
-                    } else if func_name.starts_with("showNumber") {
-                        log::error!("todo")
-                    } else if func_name.starts_with("gauge") {
-                        log::error!("todo")
-                    }
-                }
-
-                ui_items.set(next_ui_items);
-
-                loop {
-                    let mut exw = executor.write();
-                    warn!("TODO update slider values");
-                    // while let Ok((name, val)) = slider_rx.try_recv() {
-                    //     executor.on_slider("slider".to_string() + &name, val);
-                    // }
-                    exw.do_frame();
-                    let runtime = exw.runtime().unwrap();
-                    let leds = runtime.leds().unwrap();
-                    let num_leds = leds.len();
-
-                    for (i, led) in leds.iter().enumerate() {
-                        let r = led.red * 255.;
-                        let g = led.green * 255.;
-                        let b = led.blue * 255.;
-                        let color = format!("rgb({r},{g},{b})");
-                        warn!("deprecated: set_fill_style");
-                        context.set_fill_style(&color.into());
-                        context.fill_rect((i * 4) as f64, 0., 4., 10.);
-                    }
-
-                    TimeoutFuture::new(30).await;
-                }
-            }
-        }
-    });
-
-    let rendered_items = ui_items.iter().map(|item| match &*item {
-        RuntimeUi::Slider(name) => rsx!(
-            div {
-                UiSlider {
-                    key: "{name}",
-                    name,
-                    val: slider_vars
-                        .with(|slider_vars| {
-                            let res = slider_vars.get(name).cloned().unwrap_or_default();
-                            res
-                        }),
-                    oninput: move |ev: FormEvent| {
-                        let val = slider_val_normalized(&ev.value());
-                        /// slider_vars.with_mut(|slider_vars| slider_vars.insert(name.clone(), val));
-                        /// slider_tx.send((name.clone(), val));
-                        warn!("TODO oninput");
-                    },
-                }
-            }
-        ),
-        _ => rsx! { "TODO" },
-    });
-
-    rsx! {
-        canvas {
-            id: "pixels",
-            width: 400,
-            height: 10,
-            onmounted: move |ev| {
-                if let Some(el) = ev.try_as_web_event() {
-                    if let Ok(canvas) = el.dyn_into::<HtmlCanvasElement>() {
-                        let context = canvas
-                            .get_context("2d")
-                            .unwrap()
-                            .unwrap()
-                            .dyn_into::<web_sys::CanvasRenderingContext2d>()
-                            .unwrap();
-                        canvas_context.set(Some(context));
-                    } else {
-                        error!("canvas: could not onmounted");
-                    }
-                }
-            },
-        }
-        {rendered_items}
     }
 }

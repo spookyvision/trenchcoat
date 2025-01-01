@@ -1,22 +1,18 @@
 [application]
 
 # App (Project) Name
-name = "web-app"
-
-# Dioxus App Default Platform
-# desktop, web, mobile, ssr
-default_platform = "web"
+name = "trenchcoat-web"
 
 # `build` & `serve` dist path
 out_dir = "dist"
 
-# resource (public) file folder
-asset_dir = "public"
+# resource (assets) file folder
+asset_dir = "none"
 
 [web.app]
 
 # HTML title tag content
-title = "ouuuhhh"
+title = "trenchcoat"
 
 [web.watcher]
 

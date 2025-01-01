@@ -60,6 +60,8 @@ pub type DefaultStack<FFI> = Stack<FFI, 64>;
 // https://www.ecma-international.org/publications/files/ECMA-ST/Ecma-262.pdf
 
 pub type CellData = FixedI32<U16>;
+
+// TODO why Option... presumably for null? If so, make a better API
 pub type VarStorage = Map<VarString, Option<CellData>, 32>;
 
 pub type DefaultFuncDef<FFI> = Map<VarString, FuncDef<FFI>, 4>;
@@ -110,6 +112,12 @@ pub enum VMError {
     Underflow,
     #[cfg_attr(feature = "use-std", error("Stack overflow"))]
     Overflow,
+    #[cfg_attr(feature = "use-std", error("Variable not found"))]
+    VarNotFound,
+    #[cfg_attr(feature = "use-std", error("VM vanished"))]
+    Vanished,
+    #[cfg_attr(feature = "use-std", error("Val"))]
+    Val(#[cfg_attr(feature = "use-std", from)] ValError),
 }
 
 #[cfg(not(feature = "use-std"))]
@@ -194,16 +202,27 @@ impl<FFI> From<Op<FFI>> for Cell<FFI> {
     }
 }
 
+#[cfg_attr(feature = "use-std", derive(thiserror::Error))]
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ValError {
+    #[cfg_attr(feature = "use-std", error("tried to read value but found op"))]
+    Op,
+    #[cfg_attr(feature = "use-std", error("tried to read raw"))]
+    Raw,
+    #[cfg_attr(feature = "use-std", error("tried to read null"))]
+    Null,
+}
+
 impl<FFI> Cell<FFI> {
     pub(crate) fn val(num: impl ToFixed) -> Self {
         Self::Val(num.to_fixed())
     }
-    pub(crate) fn unwrap_val(&self) -> CellData {
+    pub(crate) fn unwrap_val(&self) -> Result<CellData, ValError> {
         match self {
-            Cell::Val(val) => *val,
-            Cell::Op(_) => panic!("tried to read value but found op"),
-            Cell::Raw(_) => panic!("tried to read raw"),
-            Cell::Null => panic!("tried to read null"),
+            Cell::Val(val) => Ok(*val),
+            Cell::Op(_) => Err(ValError::Op),
+            Cell::Raw(_) => Err(ValError::Raw),
+            Cell::Null => Err(ValError::Null),
         }
     }
 
@@ -312,9 +331,9 @@ where
         self.dump_state();
         self.run()?;
         self.dump_state();
-        let y = self.pop_unchecked().unwrap_val();
+        let y = self.pop()?.unwrap_val()?;
         self.run()?;
-        let x = self.pop_unchecked().unwrap_val();
+        let x = self.pop()?.unwrap_val()?;
 
         self.push(Cell::Val(op(x, y)));
         Ok(())
@@ -328,14 +347,14 @@ where
                 self.exit_fn();
             }
             Op::PopRet => {
-                self.return_stack.pop().ok_or(VMError::Underflow)?;
+                self.pop_return()?;
             }
             Op::Return => {
                 self.do_return();
             }
             // TODO: test
             Op::Nruter => {
-                let cell = self.return_stack.pop().ok_or(VMError::Underflow)?;
+                let cell = self.pop_return()?;
                 if self.stack.capacity() == 0 {
                     return Err(VMError::Overflow);
                 }
@@ -432,7 +451,9 @@ where
             Op::Or => self.binary_op(|x, y| x | y)?,
 
             Op::GetVar(name) => {
-                self.push(Cell::Val(*self.get_var(name).expect("variable not found")))
+                let var_res = self.get_var(name)?;
+                let var = var_res.expect("variable not found/is null (TODO fixme)");
+                self.push(Cell::Val(var))
             }
             Op::SetVar(name) => {
                 // TODO error propagation
@@ -440,7 +461,7 @@ where
                 // dbg!("setvar start:", name);
                 self.run()?;
                 // dbg!("setvar: end run");
-                let val = self.pop_unchecked().unwrap_val();
+                let val = self.pop()?.unwrap_val()?;
                 // dbg!("setvar", val);
                 self.set_var(name, val);
             }
@@ -454,8 +475,8 @@ where
                     match param {
                         Param::Normal => {
                             self.run()?;
-                            let pop = self.pop();
-                            params.push(pop.ok_or(VMError::Underflow)?);
+                            let cell = self.pop()?;
+                            params.push(cell);
                         }
                         Param::DynPacked => {
                             let param_len = (top.unwrap_raw() as usize).div_ceil(4) + 1;
@@ -589,7 +610,7 @@ where
         *self.var_assign_slot(name) = Some(val);
     }
 
-    pub fn get_var(&self, name: impl AsRef<str>) -> Option<&CellData> {
+    pub fn get_var(&self, name: impl AsRef<str>) -> Result<&Option<CellData>, VMError> {
         let name: &VarString = &name.as_ref().into();
 
         let res = match self.locals.last() {
@@ -597,7 +618,7 @@ where
             None => self.globals.get(name),
         };
         self.dump_state();
-        res.expect("variable not found").as_ref()
+        res.ok_or(VMError::VarNotFound)
     }
 
     pub fn push(&mut self, i: Cell<FFI>) {
@@ -611,8 +632,8 @@ where
         self.stack.push(i);
     }
 
-    pub fn pop(&mut self) -> Option<Cell<FFI>> {
-        self.stack.pop()
+    pub fn pop(&mut self) -> Result<Cell<FFI>, VMError> {
+        self.stack.pop().ok_or(VMError::Underflow)
     }
 
     pub fn pop_unchecked(&mut self) -> Cell<FFI> {
@@ -636,12 +657,8 @@ where
         self.return_stack.push(i);
     }
 
-    fn pop_return(&mut self) -> Cell<FFI> {
-        let res = self.return_stack.pop();
-        if res.is_none() {
-            err("return stack underflow");
-        }
-        res.unwrap()
+    fn pop_return(&mut self) -> Result<Cell<FFI>, VMError> {
+        self.return_stack.pop().ok_or(VMError::Underflow)
     }
 
     pub fn exit_fn(&mut self) {
@@ -694,6 +711,10 @@ where
 
     pub fn funcs(&self) -> &DefaultFuncDef<FFI> {
         &self.funcs
+    }
+
+    pub fn globals(&self) -> &VarStorage {
+        &self.globals
     }
 }
 

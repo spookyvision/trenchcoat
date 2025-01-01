@@ -4,6 +4,7 @@
 macro_rules! trench_log {
     (trace, $($arg:expr),*) => { log::trace!($($arg),*) };
     (debug, $($arg:expr),*) => { log::debug!($($arg),*) };
+    (info, $($arg:expr),*) => { log::info!($($arg),*) };
 }
 
 #[cfg(test)]
@@ -32,6 +33,10 @@ macro_rules! trench_trace {
 
 macro_rules! trench_debug {
     ($($arg:expr),*) => (trench_log!(debug, $($arg),*));
+}
+
+macro_rules! trench_info {
+    ($($arg:expr),*) => (trench_log!(info, $($arg),*));
 }
 
 // macro_rules! trench_trace {

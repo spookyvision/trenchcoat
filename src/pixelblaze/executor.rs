@@ -1,7 +1,7 @@
 use super::{ffi::PixelBlazeFFI, traits::PixelBlazeRuntime};
 use crate::forth::{
     util::pack,
-    vm::{Cell, CellData, Op, VM},
+    vm::{Cell, CellData, Op, VMError, VarStorage, VM},
 };
 
 #[derive(Clone, PartialEq)]
@@ -36,7 +36,6 @@ where
             let ffi = Op::FFI(PixelBlazeFFI::ConsoleLog);
             vm.push(Cell::from(ffi));
             vm.set_var("pixelCount", CellData::from_num(self.pixel_count));
-            vm.dump_state();
             vm.run();
             self.last_millis = vm.runtime_mut().time_millis();
         }
@@ -73,34 +72,46 @@ where
         }
     }
 
-    // TODO should return whether we're done huh
-    pub fn do_frame(&mut self) {
-        // TODO error handling instead of if let
-        if let Some(vm) = self.vm.as_mut() {
-            let now = vm.runtime_mut().time_millis();
-            let delta = now.wrapping_sub(self.last_millis);
-            self.last_millis = now;
-
-            // ensure we're not overflowing: beforeRender gets called with a delta value that
-            // must fit inside the `CellData` fixed type
-            // TODO FIXME SUCK millis is u32 but we use Fixed<16,16>
-            let clamped_delta = delta.min(CellData::MAX.to_num());
-            vm.push(clamped_delta.into());
-            vm.call_fn("beforeRender");
-            vm.pop_unchecked(); // toss bogus return value
-
-            vm.runtime_mut().led_begin();
-            // TODO performance:
-            // - function call lookup can be memoized
-            // - entire block can be moved inside vm maybe?
-            for pixel_idx in 0..self.pixel_count {
-                vm.runtime_mut().set_led_idx(pixel_idx);
-                vm.push(pixel_idx.into());
-                vm.call_fn("render");
-                vm.pop_unchecked(); // toss away implicitly returned null
-            }
-            vm.runtime_mut().led_commit();
+    pub fn dump_state(&self) {
+        if let Some(vm) = self.vm.as_ref() {
+            vm.dump_state();
         }
+    }
+
+    pub fn globals(&self) -> Option<&VarStorage> {
+        self.vm.as_ref().map(|vm| vm.globals())
+    }
+
+    // TODO should return whether we're done huh
+    pub fn do_frame(&mut self) -> Result<(), VMError> {
+        let Some(vm) = self.vm.as_mut() else {
+            return Err(VMError::Vanished);
+        };
+        let now = vm.runtime_mut().time_millis();
+        let delta = now.wrapping_sub(self.last_millis);
+        self.last_millis = now;
+
+        // ensure we're not overflowing: beforeRender gets called with a delta value that
+        // must fit inside the `CellData` fixed type
+        // TODO FIXME SUCK millis is u32 but we use Fixed<16,16>
+        let clamped_delta = delta.min(CellData::MAX.to_num());
+        vm.push(clamped_delta.into());
+        vm.call_fn("beforeRender")?;
+        vm.pop()?; // toss bogus return value
+
+        vm.runtime_mut().led_begin();
+        // TODO performance:
+        // - function call lookup can be memoized
+        // - entire block can be moved inside vm maybe?
+        for pixel_idx in 0..self.pixel_count {
+            vm.runtime_mut().set_led_idx(pixel_idx);
+            vm.push(pixel_idx.into());
+            vm.call_fn("render")?;
+            vm.pop()?; // toss away implicitly returned null
+        }
+        vm.runtime_mut().led_commit();
+
+        Ok(())
     }
 
     pub fn pixel_count(&self) -> usize {
