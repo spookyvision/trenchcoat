@@ -71,3 +71,8 @@ anyhow = { version = "1", optional = true }
 
 [dev-dependencies]
 anyhow = "1"
+
+
+[profile.profiling]
+inherits = "release"
+debug = true
