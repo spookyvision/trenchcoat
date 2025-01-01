@@ -3,6 +3,8 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use anyhow::{anyhow, Context};
 use log::{error, trace};
+#[cfg(feature = "tty")]
+use swc_common::errors::ColorConfig;
 use swc_common::{errors::Handler, sync::Lrc, SourceMap};
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
