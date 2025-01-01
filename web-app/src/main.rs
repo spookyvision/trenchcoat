@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use dioxus::{prelude::*, web::WebEventExt};
 use dioxus_logger::tracing::{debug, error, info, warn, Level};
@@ -14,6 +14,7 @@ use serde::Deserialize;
 use trenchcoat::{
     forth::{
         compiler::{compile, Flavor, Source},
+        util::MockRuntime,
         vm::VM,
     },
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
@@ -42,7 +43,7 @@ struct AppConfig {
 
 fn main() {
     // console_error_panic_hook::set_once();
-    dioxus_logger::init(Level::DEBUG).expect("failed to init logger");
+    dioxus_logger::init(Level::INFO).expect("failed to init logger");
 
     dioxus::launch(App);
 }
@@ -57,7 +58,34 @@ fn App() -> Element {
     // TODO why is this an `Option` again?
     let initial_js = config.initial_js.clone().unwrap();
 
-    let mut js = use_signal(|| initial_js.clone());
+    let pixel_count = config.pixel_count;
+
+    let mut executor = use_signal(|| None);
+
+    let code_updated = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
+        while let Some(code) = rx.next().await {
+            info!("code updated");
+            match compile(Source::String(code.as_str()), Flavor::Pixelblaze) {
+                Ok(mut new_bytecode) => {
+                    warn!("TODO send update to endpoints here");
+                    // futs.push(async move
+                    // future::join_all(futs).await;
+                    // bytecode.set(Some(new_bytecode));
+
+                    let mut vm: VM<PixelBlazeFFI, WebRuntime> =
+                        postcard::from_bytes_cobs(&mut new_bytecode).unwrap();
+                    vm.runtime_mut().init(pixel_count);
+                    let mut exe = Executor::new(vm, pixel_count);
+                    exe.start();
+                    executor.set(Some(exe));
+                }
+                Err(e) => {
+                    warn!("compile error {e:?}");
+                }
+            }
+        }
+    });
+    code_updated.send(initial_js.clone());
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
@@ -71,17 +99,90 @@ fn App() -> Element {
                 placeholder: "place code here",
                 oninput: move |ev| {
                     let val = ev.value();
-                    js.set(val);
+                    code_updated.send(val);
                 },
 
                 "{initial_js}"
             }
         }
         hr {}
-        Trenchcoat { js, config }
+        Trenchcoat2 { executor, pixel_count }
     }
 }
 
+#[component]
+fn Trenchcoat2(executor: Signal<Option<WebExecutor>>, pixel_count: usize) -> Element {
+    let mut canvas_context: Signal<Option<CanvasRenderingContext2d>> = use_signal(|| None);
+    let mut delay = use_signal(|| "50".to_string());
+    let _runner = use_future(move || {
+        warn!("TODO update slider values");
+        async move {
+            loop {
+                let mut ex = executor();
+                if let Some(mut exe) = executor() {
+                    if let Some(context) = canvas_context() {
+                        exe.do_frame();
+
+                        // while let Ok((name, val)) = slider_rx.try_recv() {
+                        //     executor.on_slider("slider".to_string() + &name, val);
+                        // }
+
+                        let runtime = exe.runtime().unwrap();
+                        let leds = runtime.leds().unwrap();
+                        let num_leds = leds.len();
+
+                        for (i, led) in leds.iter().enumerate() {
+                            let r = led.red * 255.;
+                            let g = led.green * 255.;
+                            let b = led.blue * 255.;
+                            let color = format!("rgb({r},{g},{b})");
+                            context.set_fill_style_str(&color);
+                            context.fill_rect((i * 4) as f64, 0., 4., 10.);
+                        }
+                    }
+                }
+
+                TimeoutFuture::new(delay().parse().unwrap()).await;
+            }
+        }
+    });
+
+    rsx! {
+        input {
+            r#type: "range",
+            min: "16",
+            max: "500",
+            value: delay,
+            oninput: move |ev| {
+                delay.set(ev.value());
+            },
+        }
+        span { "frame delay ms: {delay}" }
+
+        canvas {
+            id: "pixels",
+            width: 400,
+            height: 10,
+            onmounted: move |ev| {
+                if let Some(el) = ev.try_as_web_event() {
+                    if let Ok(canvas) = el.dyn_into::<HtmlCanvasElement>() {
+                        let context = canvas
+                            .get_context("2d")
+                            .unwrap()
+                            .unwrap()
+                            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+                            .unwrap();
+                        canvas_context.set(Some(context));
+                    } else {
+                        error!("canvas: could not onmounted");
+                    }
+                }
+            },
+        }
+    }
+}
+
+#[deprecated]
 #[component]
 fn Trenchcoat(js: Signal<String>, config: AppConfig) -> Element {
     let pixel_count = config.pixel_count;
@@ -117,7 +218,7 @@ fn Trenchcoat(js: Signal<String>, config: AppConfig) -> Element {
 
         async move {
             while let Some(vm_ser) = rx.next().await {
-                debug!("refresh executor");
+                info!("refresh executor");
                 bytecode.set(vm_ser.clone());
             }
         }
