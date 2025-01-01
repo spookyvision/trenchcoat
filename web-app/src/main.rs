@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use dioxus::{prelude::*, web::WebEventExt};
 use dioxus_logger::tracing::{debug, error, info, warn, Level};
@@ -6,15 +6,11 @@ use dioxus_sdk::utils::channel::{use_channel, use_listen_channel, UseChannel};
 use futures::{future, StreamExt};
 use gloo::timers::future::TimeoutFuture;
 use itertools::Itertools;
-// use local_subscription::{
-//      LocalSubscription, SplitSubscription,
-// };
 use render::{slider_val_normalized, RuntimeUi, UiSlider};
 use serde::Deserialize;
 use trenchcoat::{
     forth::{
         compiler::{compile, Flavor, Source},
-        util::MockRuntime,
         vm::VM,
     },
     pixelblaze::{executor::Executor, ffi::PixelBlazeFFI, traits::PixelBlazeRuntime},
@@ -78,9 +74,12 @@ fn App() -> Element {
                     let mut vm: VM<PixelBlazeFFI, WebRuntime> =
                         postcard::from_bytes_cobs(&mut new_bytecode).unwrap();
                     vm.runtime_mut().init(pixel_count);
-                    let mut exe = Executor::new(vm, pixel_count);
-                    exe.start();
-                    executor.set(Some(exe));
+
+                    let funcs = vm.funcs().clone();
+
+                    let mut exec = Executor::new(vm, pixel_count);
+                    exec.start();
+                    executor.set(Some(exec));
                 }
                 Err(e) => {
                     warn!("compile error {e:?}");
@@ -122,15 +121,15 @@ fn Trenchcoat2(executor: Signal<Option<WebExecutor>>, pixel_count: usize) -> Ele
         async move {
             loop {
                 let mut ex = executor();
-                if let Some(mut exe) = executor() {
+                if let Some(mut exec) = executor() {
                     if let Some(context) = canvas_context() {
-                        exe.do_frame();
+                        exec.do_frame();
 
                         // while let Ok((name, val)) = slider_rx.try_recv() {
                         //     executor.on_slider("slider".to_string() + &name, val);
                         // }
 
-                        let runtime = exe.runtime().unwrap();
+                        let runtime = exec.runtime().unwrap();
                         let leds = runtime.leds().unwrap();
                         let num_leds = leds.len();
 
