@@ -18,7 +18,13 @@ rust-version = "1.60"
 
 [workspace]
 members = ["console-app", "console-compiler"]
-exclude = ["web-app", "stm32f4-app", "minimal-alloc-gated", "esp32-c3-app"]
+exclude = [
+    "web-app",
+    "stm32f4-app",
+    "minimal-alloc-gated",
+    "esp32-c3-app",
+    "vm2",
+]
 
 [features]
 full = ["use-std", "compiler", "tty", "log"]
