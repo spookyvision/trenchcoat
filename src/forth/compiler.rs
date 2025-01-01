@@ -3,11 +3,7 @@ use std::{collections::HashMap, marker::PhantomData};
 
 use anyhow::{anyhow, Context};
 use log::trace;
-use swc_common::{
-    errors::{ColorConfig, Handler},
-    sync::Lrc,
-    SourceMap,
-};
+use swc_common::{errors::Handler, sync::Lrc, SourceMap};
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
 use swc_ecma_utils::ExprExt;
@@ -210,9 +206,9 @@ where
             }
             Expr::Assign(ass) => {
                 let left = &ass.left;
-
-                let name: &AssignTargetPat = left.as_pat().expect("wat is this {left:?}");
-                let name = var_name(PatWrap::AssignTargetPat(name));
+                let err = format!("wat is this {left:?}",);
+                let name: &BindingIdent = left.as_ident().expect(&err);
+                let name = var_name(PatWrap::Ident(name));
                 let right = &ass.right;
                 trace!("assign {name} = {:?}", right);
 
@@ -439,14 +435,14 @@ where
 
 enum PatWrap<'a> {
     Pat(&'a Pat),
-    AssignTargetPat(&'a AssignTargetPat),
+    Ident(&'a BindingIdent),
 }
 
 impl<'a> PatWrap<'a> {
     fn as_ident(&self) -> Option<&BindingIdent> {
         match self {
             PatWrap::Pat(p) => p.as_ident(),
-            PatWrap::AssignTargetPat(p) => todo!("swc changed and now we have this mess ;< {p:?}"),
+            PatWrap::Ident(id) => Some(id),
         }
     }
 }
