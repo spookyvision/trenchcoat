@@ -11,24 +11,24 @@ trenchcoat = { path = "..", features = [
     "compiler",
     "log",
     "use-std",
-], default_features = false }
+], default-features = false }
 chrono = { version = "0.4", features = ["wasmbind"] }
 wasm-bindgen = "0.2.85"
-fermi = "0.3"
-gloo = { version = "0.8", features = ["futures"] }
-dioxus = { version = "0.3.2" }
+#fermi = "0.3"
+gloo = { version = "0.11", features = ["futures"] }
+dioxus = { version = "0.6", features = ["web"] }
+dioxus-logger = "0.6"
 log = "0.4.6"
-wasm-logger = "0.2.0"
 console_error_panic_hook = "0.1.7"
 postcard = { version = "1.0.2", features = ["use-std"] }
 anyhow = "1.0.66"
-surf = { version = "2", default_features = false, features = ["wasm-client"] }
+# surf = { version = "2", default-features = false, features = ["wasm-client"] }
 futures = "0.3.25"
-config = { version = "0.13.2", features = ["toml"] }
-serde = { version = "1.0.147", features = ["derive"], default_features = false }
-dioxus-web = "0.3.0"
+config = { version = "0.15", features = ["toml"] }
+serde = { version = "1", features = ["derive"], default-features = false }
 palette = "0.7"
-itertools = "0.10.5"
+itertools = "0.14"
+dioxus-sdk = { version = "0.6.0", features = ["channel"] }
 
 [dependencies.web-sys]
 version = "0.3.4"
@@ -44,6 +44,18 @@ features = [
 dioxus-interpreter-js = { git = "https://github.com/DioxusLabs/dioxus.git" }
 
 [build-dependencies]
-serde = { version = "1.0.147", features = ["derive"], default_features = false }
+serde = { version = "1.0.147", features = ["derive"], default-features = false }
 postcard = { version = "1.0.2", features = ["use-std"] }
 config = { version = "0.13.2", features = ["toml"] }
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
