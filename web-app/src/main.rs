@@ -42,7 +42,10 @@ struct AppConfig {
 }
 
 fn main() {
-    // console_error_panic_hook::set_once();
+    // for trenchcoat logs. TODO migrate to tracing??
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+
+    // sadly DEBUG means swc spam
     dioxus_logger::init(Level::INFO).expect("failed to init logger");
 
     dioxus::launch(App);

@@ -78,10 +78,14 @@ where
         // TODO error handling instead of if let
         if let Some(vm) = self.vm.as_mut() {
             let now = vm.runtime_mut().time_millis();
-            let delta = now - self.last_millis;
+            let delta = now.wrapping_sub(self.last_millis);
             self.last_millis = now;
 
-            vm.push(delta.into());
+            // ensure we're not overflowing: beforeRender gets called with a delta value that
+            // must fit inside the `CellData` fixed type
+            // TODO FIXME SUCK millis is u32 but we use Fixed<16,16>
+            let clamped_delta = delta.min(CellData::MAX.to_num());
+            vm.push(clamped_delta.into());
             vm.call_fn("beforeRender");
             vm.pop_unchecked(); // toss bogus return value
 

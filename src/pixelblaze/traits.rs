@@ -13,6 +13,11 @@ pub trait Peripherals {
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData);
     fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData);
 
+    // TODO we're extending pixelblaze here.
+    // strictly speaking this should be in a different namespace…
+    // but how to compose those without drowning in generics?
+    fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData);
+
     fn led_commit(&mut self) {}
 }
 

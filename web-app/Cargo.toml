@@ -29,6 +29,7 @@ serde = { version = "1", features = ["derive"], default-features = false }
 palette = "0.7"
 itertools = "0.14"
 dioxus-sdk = { version = "0.6.0", features = ["channel"] }
+wasm-logger = "0.2.0"
 
 [dependencies.web-sys]
 version = "0.3.4"

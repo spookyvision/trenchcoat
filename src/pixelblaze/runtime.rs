@@ -47,6 +47,10 @@ impl Peripherals for ConsoleRuntime {
         todo!();
     }
 
+    fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData) {
+        todo!()
+    }
+
     fn led_commit(&mut self) {
         trench_debug!("LED commit");
         trench_debug!("step time by {}ms", self.dt);
@@ -75,5 +79,9 @@ impl Peripherals for MockRuntime {
 
     fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
         unimplemented!();
+    }
+
+    fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData) {
+        unimplemented!()
     }
 }

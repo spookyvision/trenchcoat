@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use palette::{FromColor, Hsl, Hsv, Srgb};
+use palette::{hsl, okhsl::Okhsl, FromColor, Hsl, Hsv, Srgb};
 use trenchcoat::{
     forth::vm::CellData, pixelblaze::traits::Peripherals, vanillajs::runtime::VanillaJSRuntime,
 };
@@ -43,6 +43,16 @@ impl Peripherals for WebRuntime {
             let g: f32 = g.to_num();
             let b: f32 = b.to_num();
             leds[self.led_idx] = Srgb::new(r, g, b);
+        }
+    }
+
+    fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData) {
+        if let Some(leds) = self.leds.as_mut() {
+            let h: f32 = h.to_num();
+            let s: f32 = s.to_num();
+            let l: f32 = l.to_num();
+            let okhsl = Okhsl::new(h * 360., s, l);
+            leds[self.led_idx] = Srgb::from_color(okhsl);
         }
     }
 

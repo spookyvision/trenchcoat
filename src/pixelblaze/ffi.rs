@@ -1,5 +1,6 @@
 use core::str::from_utf8;
 
+use fixed::traits::{Fixed, ToFixed};
 use serde::{Deserialize, Serialize};
 
 use super::traits::PixelBlazeRuntime;
@@ -10,6 +11,11 @@ use crate::forth::{
 
 // TODO this sucks - any error here is not caught by the compiler
 // e.g. forget to map "rgb" => ::Rgb, boom b0rk
+// also it's a ton of work:
+// - Peripherals
+// - FFI_FUNCS
+// - FFI enum
+// - call_info
 // TODO also this isn't accessible at runtime, which arguably is even more sucky
 #[cfg(feature = "compiler")]
 pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
@@ -19,6 +25,7 @@ pub const FFI_FUNCS: phf::Map<&'static str, PixelBlazeFFI> = phf::phf_map! {
     "wave" => PixelBlazeFFI::Wave,
     "hsv" => PixelBlazeFFI::Hsv,
     "rgb" => PixelBlazeFFI::Rgb,
+    "ext_okhsl" => PixelBlazeFFI::ExtOkHsl,
 };
 
 pub const PI: CellData = CellData::unwrapped_from_str("3.141592653589793");
@@ -33,6 +40,7 @@ pub enum PixelBlazeFFI {
     Abs,
     Hsv,
     Rgb,
+    ExtOkHsl,
 }
 
 impl<RT> FFIOps<RT> for PixelBlazeFFI
@@ -45,6 +53,7 @@ where
             PixelBlazeFFI::ConsoleLog => &[Param::DynPacked],
             PixelBlazeFFI::Hsv => &[Param::Normal, Param::Normal, Param::Normal],
             PixelBlazeFFI::Rgb => &[Param::Normal, Param::Normal, Param::Normal],
+            PixelBlazeFFI::ExtOkHsl => &[Param::Normal, Param::Normal, Param::Normal],
             _ => &[Param::Normal],
         }
     }
@@ -97,6 +106,14 @@ where
                 rt.led_rgb(r, g, b);
                 res = Cell::Null;
             }
+            PixelBlazeFFI::ExtOkHsl => {
+                let h = CellData::try_from(&params[2])?;
+                let s = CellData::try_from(&params[1])?;
+                let l = CellData::try_from(&params[0])?;
+
+                rt.ext_led_okhsl(h.frac(), s, l);
+                res = Cell::Null;
+            }
         }
 
         Ok(res)
@@ -107,7 +124,7 @@ pub(crate) fn time(interval: CellData, runtime: &mut impl PixelBlazeRuntime) -> 
     if interval == 0 {
         return CellData::from_num(0);
     }
-    let fac = interval * (u16::MAX as i32);
+    let fac = interval.wrapping_mul(CellData::MAX);
     let now = CellData::from_num((runtime.time_millis()) % 32768);
     let res = (now / fac).frac();
     res

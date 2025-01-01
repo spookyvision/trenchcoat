@@ -2,7 +2,7 @@ use core::str::from_utf8;
 use std::{collections::HashMap, marker::PhantomData};
 
 use anyhow::{anyhow, Context};
-use log::trace;
+use log::{error, trace};
 use swc_common::{errors::Handler, sync::Lrc, SourceMap};
 use swc_ecma_ast::*;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax};
@@ -151,10 +151,10 @@ where
     }
     fn eval_expr(&mut self, ex: &Expr) {
         match ex {
-            Expr::This(_) => todo!(),
-            Expr::Array(_) => todo!(),
-            Expr::Object(_) => todo!(),
-            Expr::Fn(_) => todo!(),
+            Expr::This(_) => error!("implement me"),
+            Expr::Array(_) => error!("implement me"),
+            Expr::Object(_) => error!("implement me"),
+            Expr::Fn(_) => error!("implement me"),
             Expr::Unary(unary_expr) => {
                 match unary_expr.op {
                     UnaryOp::Minus => {
@@ -165,43 +165,43 @@ where
                     UnaryOp::Plus => {
                         // no-op ... right? RIGHT?
                     }
-                    UnaryOp::Bang => todo!(),
-                    UnaryOp::Tilde => todo!(),
-                    UnaryOp::TypeOf => todo!(),
-                    UnaryOp::Void => todo!(),
-                    UnaryOp::Delete => todo!(),
+                    UnaryOp::Bang => error!("implement me"),
+                    UnaryOp::Tilde => error!("implement me"),
+                    UnaryOp::TypeOf => error!("implement me"),
+                    UnaryOp::Void => error!("implement me"),
+                    UnaryOp::Delete => error!("implement me"),
                 }
             }
-            Expr::Update(_) => todo!(),
+            Expr::Update(_) => error!("implement me"),
             Expr::Bin(bin_expr) => {
                 self.eval_expr(&bin_expr.left);
                 self.eval_expr(&bin_expr.right);
                 let _ = match bin_expr.op {
                     BinaryOp::EqEq => self.stack.push(Cell::Op(Op::EqEq)),
                     BinaryOp::NotEq => self.stack.push(Cell::Op(Op::NotEq)),
-                    BinaryOp::EqEqEq => todo!(),
-                    BinaryOp::NotEqEq => todo!(),
+                    BinaryOp::EqEqEq => error!("implement me"),
+                    BinaryOp::NotEqEq => error!("implement me"),
                     BinaryOp::Lt => self.stack.push(Cell::Op(Op::Lt)),
                     BinaryOp::LtEq => self.stack.push(Cell::Op(Op::LtEq)),
                     BinaryOp::Gt => self.stack.push(Cell::Op(Op::Gt)),
                     BinaryOp::GtEq => self.stack.push(Cell::Op(Op::GtEq)),
-                    BinaryOp::LShift => todo!(),
-                    BinaryOp::RShift => todo!(),
-                    BinaryOp::ZeroFillRShift => todo!(),
+                    BinaryOp::LShift => error!("implement me"),
+                    BinaryOp::RShift => error!("implement me"),
+                    BinaryOp::ZeroFillRShift => error!("implement me"),
                     BinaryOp::Add => self.stack.push(Cell::Op(Op::Add)),
                     BinaryOp::Sub => self.stack.push(Cell::Op(Op::Sub)),
                     BinaryOp::Mul => self.stack.push(Cell::Op(Op::Mul)),
                     BinaryOp::Div => self.stack.push(Cell::Op(Op::Div)),
                     BinaryOp::Mod => self.stack.push(Cell::Op(Op::Mod)),
                     BinaryOp::BitOr => self.stack.push(Cell::Op(Op::Or)),
-                    BinaryOp::BitXor => todo!(),
-                    BinaryOp::BitAnd => todo!(),
-                    BinaryOp::LogicalOr => todo!(),
-                    BinaryOp::LogicalAnd => todo!(),
-                    BinaryOp::In => todo!(),
-                    BinaryOp::InstanceOf => todo!(),
-                    BinaryOp::Exp => todo!(),
-                    BinaryOp::NullishCoalescing => todo!(),
+                    BinaryOp::BitXor => error!("implement me"),
+                    BinaryOp::BitAnd => error!("implement me"),
+                    BinaryOp::LogicalOr => error!("implement me"),
+                    BinaryOp::LogicalAnd => error!("implement me"),
+                    BinaryOp::In => error!("implement me"),
+                    BinaryOp::InstanceOf => error!("implement me"),
+                    BinaryOp::Exp => error!("implement me"),
+                    BinaryOp::NullishCoalescing => error!("implement me"),
                 };
             }
             Expr::Assign(ass) => {
@@ -217,9 +217,9 @@ where
                 self.inside_assignment = false;
                 self.stack.push(Cell::Op(Op::SetVar(name.into())));
             }
-            Expr::Member(_) => todo!(),
-            Expr::SuperProp(_) => todo!(),
-            Expr::Cond(_) => todo!(),
+            Expr::Member(_) => error!("implement me"),
+            Expr::SuperProp(_) => error!("implement me"),
+            Expr::Cond(_) => error!("implement me"),
             Expr::Call(call_expr) => {
                 if !self.inside_assignment {
                     self.stack.push(Op::PopRet.into());
@@ -233,8 +233,8 @@ where
                 let callee = &call_expr.callee;
                 trace!("{callee:?}");
                 match callee {
-                    Callee::Super(_) => todo!(),
-                    Callee::Import(_) => todo!(),
+                    Callee::Super(_) => error!("implement me"),
+                    Callee::Import(_) => error!("implement me"),
                     Callee::Expr(call_expr) => match call_expr.as_ref() {
                         Expr::Member(me) => {
                             // TODO this always calls FFI funcs, e.g. console.log turns into ffi namespace console_log
@@ -269,15 +269,15 @@ where
                                 }
                             };
                         }
-                        Expr::This(_) => todo!(),
-                        Expr::Object(_) => todo!(),
-                        Expr::Fn(f) => todo!(),
-                        _ => todo!(),
+                        Expr::This(_) => error!("implement me"),
+                        Expr::Object(_) => error!("implement me"),
+                        Expr::Fn(f) => error!("implement me"),
+                        _ => error!("implement me"),
                     },
                 }
                 // println!("call! {name:?}({args:?})");
             }
-            Expr::New(_) => todo!(),
+            Expr::New(_) => error!("implement me"),
             Expr::Seq(s) => {
                 trace!("SEQ {s:?}");
             }
@@ -298,37 +298,14 @@ where
                     Lit::Bool(b) => self
                         .stack
                         .push(Cell::Val(CellData::from_num(b.value as i32))),
-                    Lit::Null(_) => todo!(),
+                    Lit::Null(_) => error!("implement me"),
                     Lit::Num(num) => self.stack.push(Cell::Val(CellData::from_num(num.value))),
-                    Lit::BigInt(_) => todo!(),
-                    Lit::Regex(_) => todo!(),
-                    Lit::JSXText(_) => todo!(),
+                    Lit::BigInt(_) => error!("implement me"),
+                    Lit::Regex(_) => error!("implement me"),
+                    Lit::JSXText(_) => error!("implement me"),
                 };
             }
-            _ => todo!(),
-            /*
-            Expr::Tpl(_) => todo!(),
-            Expr::TaggedTpl(_) => todo!(),
-            Expr::Arrow(_) => todo!(),
-            Expr::Class(_) => todo!(),
-            Expr::Yield(_) => todo!(),
-            Expr::MetaProp(_) => todo!(),
-            Expr::Await(_) => todo!(),
-            Expr::Paren(_) => todo!(),
-            Expr::JSXMember(_) => todo!(),
-            Expr::JSXNamespacedName(_) => todo!(),
-            Expr::JSXEmpty(_) => todo!(),
-            Expr::JSXElement(_) => todo!(),
-            Expr::JSXFragment(_) => todo!(),
-            Expr::TsTypeAssertion(_) => todo!(),
-            Expr::TsConstAssertion(_) => todo!(),
-            Expr::TsNonNull(_) => todo!(),
-            Expr::TsTypeCast(_) => todo!(),
-            Expr::TsAs(_) => todo!(),
-            Expr::PrivateName(_) => todo!(),
-            Expr::OptChain(_) => todo!(),
-            Expr::Invalid(_) => todo!(),
-             */
+            _ => error!("implement me"),
         }
     }
 
