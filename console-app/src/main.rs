@@ -20,10 +20,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let vm: VM<PixelBlazeFFI, ConsoleRuntime> = postcard::from_bytes_cobs(&mut ser)?;
 
-    let pixel_count = 10;
+    let pixel_count = 1000;
     let mut executor = Executor::new(vm, pixel_count);
     executor.start();
-    for _ in 0..4 {
+    for _ in 0..1000 {
         executor.do_frame();
     }
 
