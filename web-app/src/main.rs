@@ -248,17 +248,6 @@ fn Trenchcoat(
 
     rsx! {
         {ui_items_comps}
-        input {
-            r#type: "range",
-            min: "16",
-            max: "500",
-            value: delay,
-            oninput: move |ev| {
-                delay.set(ev.value());
-            },
-        }
-        label { "frame delay ms: {delay}" }
-
         canvas {
             id: "pixels",
             width: 400,
@@ -279,5 +268,15 @@ fn Trenchcoat(
                 }
             },
         }
+        input {
+            r#type: "range",
+            min: "16",
+            max: "500",
+            value: delay,
+            oninput: move |ev| {
+                delay.set(ev.value());
+            },
+        }
+        label { "frame delay ms: {delay}" }
     }
 }
