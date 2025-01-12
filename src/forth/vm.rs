@@ -1,15 +1,11 @@
 use core::{fmt::Debug, marker::PhantomData, str::from_utf8};
 
-use fixed::{
-    traits::ToFixed,
-    types::extra::{U16, U8},
-    FixedI32,
-};
+use fixed::{traits::ToFixed, types::extra::U16, FixedI32};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "alloc"))]
 pub(crate) mod types {
@@ -165,6 +161,7 @@ fn err(s: &str) {
     panic!("ERR: {s}")
 }
 
+#[allow(unused)]
 trait BoolExt {
     fn to_fixed(&self) -> CellData;
 }
@@ -185,6 +182,17 @@ pub enum Cell<FFI> {
     Raw(i32),
     Op(Op<FFI>),
     Null,
+}
+
+// no-specialization fuckery workaround
+pub(crate) trait ToNull<FFI> {
+    fn to_null(&self) -> Cell<FFI>;
+}
+
+impl<T> ToNull<T> for () {
+    fn to_null(&self) -> Cell<T> {
+        Cell::Null
+    }
 }
 
 impl<TF, FFI> From<TF> for Cell<FFI>
@@ -217,7 +225,7 @@ impl<FFI> Cell<FFI> {
     pub(crate) fn val(num: impl ToFixed) -> Self {
         Self::Val(num.to_fixed())
     }
-    pub(crate) fn unwrap_val(&self) -> Result<CellData, ValError> {
+    pub(crate) fn checked_val(&self) -> Result<CellData, ValError> {
         match self {
             Cell::Val(val) => Ok(*val),
             Cell::Op(_) => Err(ValError::Op),
@@ -331,9 +339,9 @@ where
         self.dump_state();
         self.run()?;
         self.dump_state();
-        let y = self.pop()?.unwrap_val()?;
+        let y = self.pop()?.checked_val()?;
         self.run()?;
-        let x = self.pop()?.unwrap_val()?;
+        let x = self.pop()?.checked_val()?;
 
         self.push(Cell::Val(op(x, y)));
         Ok(())
@@ -461,7 +469,7 @@ where
                 // dbg!("setvar start:", name);
                 self.run()?;
                 // dbg!("setvar: end run");
-                let val = self.pop()?.unwrap_val()?;
+                let val = self.pop()?.checked_val()?;
                 // dbg!("setvar", val);
                 self.set_var(name, val);
             }
@@ -690,7 +698,7 @@ where
             self.stack.pop();
             // trench_trace!("running {op:?}");
             self.dump_state();
-            self.eval(&op);
+            self.eval(&op)?;
 
             // trench_trace!("{op:?} done\n------------------------");
         }
@@ -724,7 +732,7 @@ mod tests {
     use crate::{
         forth::{
             compiler::{compile, Flavor, Source},
-            util::assert_similar,
+            util::test::assert_similar,
         },
         pixelblaze::{ffi::PixelBlazeFFI, runtime::ConsoleRuntime},
         vanillajs::runtime::VanillaJSFFI,
@@ -763,8 +771,8 @@ mod tests {
         let mut bytecode = compile(Source::String(source), Flavor::VanillaJS)?;
         let mut de: VM<VanillaJSFFI, ConsoleRuntime> = postcard::from_bytes_cobs(&mut bytecode)?;
         de.run();
-        let x = de.get_var("x");
-        assert_eq!(x, Some(&CellData::from_num(2)));
+        let x = *de.get_var("x")?;
+        assert_eq!(x, Some(CellData::from_num(2)));
         Ok(())
     }
 }

@@ -126,6 +126,6 @@ impl VanillaJSRuntime for MockRuntime {
     }
 
     fn log(&mut self, s: &str) {
-        unimplemented!()
+        unimplemented!("log {s}")
     }
 }

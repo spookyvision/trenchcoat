@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use trenchcoat::{
     forth::{
@@ -22,9 +22,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pixel_count = 1000;
     let mut executor = Executor::new(vm, pixel_count);
-    executor.start();
+    executor.start()?;
     for _ in 0..1000 {
-        executor.do_frame();
+        executor.do_frame()?;
     }
 
     Ok(())

@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 
-use super::vm::{Cell, CellData, VM};
+use super::vm::Cell;
 
 // TODO medium sized wart, what do?
 #[derive(Clone, PartialEq, Default)]
@@ -77,12 +77,17 @@ pub fn pack<'a, FFI: 'a>(slice: &'a [u8]) -> impl DoubleEndedIterator<Item = Cel
     packed.chain(other)
 }
 
+// these are not tests, but test utils; actual tests below
 #[cfg(test)]
-pub fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
-    let fac = 10f64.powf(decimals as _);
-    let actual = (actual.to_num::<f64>() * fac).round() as i32;
-    let expected = (expected * fac).round() as i32;
-    assert_eq!(actual, expected);
+pub(crate) mod test {
+    use crate::forth::vm::CellData;
+
+    pub(crate) fn assert_similar(expected: f64, actual: CellData, decimals: u8) {
+        let fac = 10f64.powf(decimals as _);
+        let actual = (actual.to_num::<f64>() * fac).round() as i32;
+        let expected = (expected * fac).round() as i32;
+        assert_eq!(actual, expected);
+    }
 }
 
 // TODO move tests where they belong
@@ -93,7 +98,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        forth::vm::{Cell, Op},
+        forth::vm::{Cell, Op, VM},
         vanillajs::runtime::{stud::TestRuntime, VanillaJSFFI},
     };
 

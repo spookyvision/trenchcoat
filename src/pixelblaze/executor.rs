@@ -24,36 +24,38 @@ where
         }
     }
 
-    pub fn start(&mut self) {
-        // TODO error handling
-        if let Some(vm) = self.vm.as_mut() {
-            vm.push(Op::PopRet.into());
-            let s = "*** VM START ***\n";
-            let ops = pack(s.as_bytes());
-            for el in ops {
-                vm.push(el);
-            }
-            let ffi = Op::FFI(PixelBlazeFFI::ConsoleLog);
-            vm.push(Cell::from(ffi));
-            vm.set_var("pixelCount", CellData::from_num(self.pixel_count));
-            vm.run();
-            self.last_millis = vm.runtime_mut().time_millis();
+    pub fn start(&mut self) -> Result<(), VMError> {
+        let Some(vm) = self.vm.as_mut() else {
+            return Err(VMError::Vanished);
+        };
+        vm.push(Op::PopRet.into());
+        let s = "*** VM START ***\n";
+        let ops = pack(s.as_bytes());
+        for el in ops {
+            vm.push(el);
         }
+        let ffi = Op::FFI(PixelBlazeFFI::ConsoleLog);
+        vm.push(Cell::from(ffi));
+        vm.set_var("pixelCount", CellData::from_num(self.pixel_count));
+        vm.run()?;
+        self.last_millis = vm.runtime_mut().time_millis();
+        Ok(())
     }
 
-    pub fn exit(mut self) {
-        // TODO error handling instead of if let
-        if let Some(vm) = self.vm.as_mut() {
-            vm.push(Op::PopRet.into());
-            let s = "*** DÖNE! ***";
-            let ops = pack(s.as_bytes());
-            for el in ops {
-                vm.push(el);
-            }
-            let ffi = Op::FFI(PixelBlazeFFI::ConsoleLog);
-            vm.push(Cell::from(ffi));
-            vm.run();
+    pub fn exit(mut self) -> Result<(), VMError> {
+        let Some(vm) = self.vm.as_mut() else {
+            return Err(VMError::Vanished);
+        };
+        vm.push(Op::PopRet.into());
+        let s = "*** DÖNE! ***";
+        let ops = pack(s.as_bytes());
+        for el in ops {
+            vm.push(el);
         }
+        let ffi = Op::FFI(PixelBlazeFFI::ConsoleLog);
+        vm.push(Cell::from(ffi));
+        vm.run()?;
+        Ok(())
     }
 
     pub fn set_var(&mut self, name: impl AsRef<str>, val: CellData) {
@@ -63,13 +65,15 @@ where
         }
     }
 
-    pub fn on_slider(&mut self, name: impl AsRef<str>, val: f32) {
-        // TODO error handling instead of if let
-        if let Some(vm) = self.vm.as_mut() {
-            vm.push(val.into());
-            vm.call_fn(name);
-            vm.pop_unchecked(); // toss bogus return value
-        }
+    pub fn on_slider(&mut self, name: impl AsRef<str>, val: f32) -> Result<(), VMError> {
+        let Some(vm) = self.vm.as_mut() else {
+            return Err(VMError::Vanished);
+        };
+        vm.push(val.into());
+        vm.call_fn(name)?;
+        vm.pop()?;
+
+        Ok(())
     }
 
     pub fn dump_state(&self) {

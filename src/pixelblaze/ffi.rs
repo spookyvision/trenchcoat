@@ -1,12 +1,11 @@
 use core::str::from_utf8;
 
-use fixed::traits::{Fixed, ToFixed};
 use serde::{Deserialize, Serialize};
 
 use super::traits::PixelBlazeRuntime;
 use crate::forth::{
     util::StackSlice,
-    vm::{Cell, CellData, FFIOps, Param, VMError},
+    vm::{Cell, CellData, FFIOps, Param, ToNull, VMError},
 };
 
 // TODO this sucks - any error here is not caught by the compiler
@@ -59,34 +58,29 @@ where
     }
 
     fn dispatch(&self, rt: &mut RT, params: &[Cell<Self>]) -> Result<Cell<Self>, VMError> {
-        let res;
-        match self {
+        let res = match self {
             PixelBlazeFFI::ConsoleLog => {
                 let v: heapless::Vec<u8, 32> = StackSlice(params)
                     .try_into()
                     .map_err(|_| VMError::Malformed)?;
-                rt.log(from_utf8(&v).map_err(|_| VMError::Malformed)?);
-                res = Cell::Null;
+                rt.log(from_utf8(&v).map_err(|_| VMError::Malformed)?)
+                    .to_null()
             }
             PixelBlazeFFI::Sin => {
                 let angle = CellData::try_from(&params[0])?;
-                let inner_res = cordic::sin(angle);
-                res = Cell::Val(inner_res);
+                cordic::sin(angle).into()
             }
             PixelBlazeFFI::Time => {
                 let interval = CellData::try_from(&params[0])?;
-                let inner_res = time(interval, rt);
-                res = Cell::Val(inner_res);
+                time(interval, rt).into()
             }
             PixelBlazeFFI::Wave => {
                 let arg = CellData::try_from(&params[0])?;
-                let inner_res = wave(arg);
-                res = Cell::Val(inner_res);
+                wave(arg).into()
             }
             PixelBlazeFFI::Abs => {
                 let arg = CellData::try_from(&params[0])?;
-                let inner_res = abs(arg);
-                res = Cell::Val(inner_res);
+                abs(arg).into()
             }
             PixelBlazeFFI::Hsv => {
                 let h = CellData::try_from(&params[2])?;
@@ -94,8 +88,7 @@ where
                 let v = CellData::try_from(&params[0])?;
 
                 // pb spec says h wraps between 0..1
-                rt.led_hsv(h.frac(), s, v);
-                res = Cell::Null;
+                rt.led_hsv(h.frac(), s, v).to_null()
             }
 
             PixelBlazeFFI::Rgb => {
@@ -103,18 +96,16 @@ where
                 let g = CellData::try_from(&params[1])?;
                 let b = CellData::try_from(&params[0])?;
 
-                rt.led_rgb(r, g, b);
-                res = Cell::Null;
+                rt.led_rgb(r, g, b).to_null()
             }
             PixelBlazeFFI::ExtOkHsl => {
                 let h = CellData::try_from(&params[2])?;
                 let s = CellData::try_from(&params[1])?;
                 let l = CellData::try_from(&params[0])?;
 
-                rt.ext_led_okhsl(h.frac(), s, l);
-                res = Cell::Null;
+                rt.ext_led_okhsl(h.frac(), s, l).to_null()
             }
-        }
+        };
 
         Ok(res)
     }
@@ -146,9 +137,17 @@ pub(crate) fn wave(val: CellData) -> CellData {
 mod tests {
     use super::*;
     use crate::{
-        forth::{util::assert_similar, vm::Op},
-        pixelblaze::util::vm,
+        forth::{
+            util::test::assert_similar,
+            vm::{Op, VM},
+        },
+        pixelblaze::runtime::ConsoleRuntime,
     };
+
+    pub(crate) fn vm() -> VM<PixelBlazeFFI, ConsoleRuntime> {
+        VM::new_empty(ConsoleRuntime::default())
+    }
+
     #[test]
     fn test_wave() {
         let decimals = 2;
@@ -179,7 +178,7 @@ mod tests {
         vm.run();
 
         let precise: f64 = param.sin();
-        let approximate = vm.pop_unchecked().unwrap_val();
+        let approximate = vm.pop()?.checked_val()?;
 
         assert_similar(precise, approximate, 1);
         Ok(())

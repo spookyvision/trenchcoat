@@ -1,4 +1,3 @@
-use core::str::from_utf8;
 use std::{collections::HashMap, marker::PhantomData};
 
 use anyhow::{anyhow, Context};
@@ -29,6 +28,23 @@ pub enum Flavor {
 pub enum Source<'a> {
     File(Box<std::path::Path>),
     String(&'a str),
+}
+
+#[cfg(not(feature = "tty"))]
+#[derive(Clone, Copy)]
+struct LogEmitter;
+
+impl std::io::Write for LogEmitter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(s) = core::str::from_utf8(buf) {
+            log::warn!("{s}");
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 pub fn compile(source: Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
@@ -76,21 +92,6 @@ pub fn compile(source: Source, flavor: Flavor) -> anyhow::Result<Vec<u8>> {
     anyhow::bail!("Compilation failed")
 }
 
-#[derive(Clone, Copy)]
-struct LogEmitter;
-
-impl std::io::Write for LogEmitter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if let Ok(s) = from_utf8(buf) {
-            log::warn!("{s}");
-        }
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
 fn new_handler(source_map: Lrc<SourceMap>) -> Handler {
     #[cfg(feature = "tty")]
     {
@@ -273,7 +274,7 @@ where
                         }
                         Expr::This(_) => error!("implement me"),
                         Expr::Object(_) => error!("implement me"),
-                        Expr::Fn(f) => error!("implement me"),
+                        Expr::Fn(_f) => error!("implement me"),
                         _ => error!("implement me"),
                     },
                 }

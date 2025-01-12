@@ -40,15 +40,15 @@ impl Peripherals for ConsoleRuntime {
         let h: f32 = h.to_num();
         let s: f32 = s.to_num();
         let v: f32 = v.to_num();
-        trench_debug!("LED[{}] HSV({},{},{})", self.led_idx, h, s, v);
+        trench_debug!("LED[{}] HSV({h},{s},{v})", self.led_idx);
     }
 
     fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
-        todo!();
+        trench_debug!("LED[{}] RGB({r},{g},{b})", self.led_idx);
     }
 
     fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData) {
-        todo!()
+        trench_debug!("LED[{}] OKHSL({h},{s},{l})", self.led_idx);
     }
 
     fn led_commit(&mut self) {
@@ -70,18 +70,18 @@ impl VanillaJSRuntime for ConsoleRuntime {
 
 impl Peripherals for MockRuntime {
     fn set_led_idx(&mut self, idx: usize) {
-        unimplemented!()
+        unimplemented!("set led idx {idx}")
     }
 
     fn led_hsv(&mut self, h: CellData, s: CellData, v: CellData) {
-        unimplemented!()
+        unimplemented!("led hsv {h} {s} {v}")
     }
 
     fn led_rgb(&mut self, r: CellData, g: CellData, b: CellData) {
-        unimplemented!();
+        unimplemented!("led rgb {r} {g} {b}")
     }
 
     fn ext_led_okhsl(&mut self, h: CellData, s: CellData, l: CellData) {
-        unimplemented!()
+        unimplemented!("led okhsl {h} {s} {l}")
     }
 }
