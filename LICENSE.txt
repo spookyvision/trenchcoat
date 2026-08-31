@@ -12,7 +12,7 @@ furnished to do so, subject to the following conditions:
 - The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
-- You're forbidden to use the Software in the following industries: cryptocurrency, military, fossil fuels. 
+- You're forbidden to use the Software in the following industries: cryptocurrency, military, fossil fuels, generative AI. 
 This includes advertising or other kinds of promotion.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
